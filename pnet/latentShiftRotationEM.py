@@ -28,9 +28,9 @@ def log_product_of_bernoullis_mixture_likelihood(X, logit_odds, log_inv_mean_sum
 
     memory_limit = 100
 
-    b = max(math.floor(memory_limit * 1024 * 1024 / (64 * d) - m), 1)
+    b = int(max(math.floor(memory_limit * 1024 * 1024 / (64 * d) - m), 1))
     
-    num_b = math.ceil(n / b)
+    num_b = int(math.ceil(n / b))
 
     loglike = np.empty((n,m))
     for i in range(num_b):

@@ -103,7 +103,74 @@ class ModuloShiftingRotationPartsLayer(Layer):
         finalResult = np.array(finalResult, dtype = np.int64)
         return finalResult, self._num_parts * self._num_rot
 
+    def extract_no_edge(self,X):
+        assert self._parts is not None, "Must be trained before calling extract"
+        
+        bedges_settings = self._settings['bedges']
+        radius = bedges_settings['radius']
+        #X = ag.features.bspread(X, spread=self._settings['bedges']['spread'], radius = self._settings['bedges']['radius'])
+
+        support_mask = np.ones(self._part_shape, dtype=np.bool)
+        th = self._settings['threshold']
+        n_coded = 1
+        from pnet.cyfuncs import code_index_map_general
+        feature_map = code_index_map_general(X, self._parts, support_mask.astype(np.uint8),th,outer_frame=self._settings['outer_frame'],n_coded = 1, standardize=self._settings.get('standardize',0)
+        min_percentile = self._settings.get('min_percentile',0.0))
+        
+        # Rotation spreading?
+        rotspread = self._settings.get('rotation_spreading_radius', 0)
+        if rotspread > 0:
+            between_feature_spreading = np.zeros((self._num_parts * self._num_rot , rotspread*2 + 1), dtype=np.int64)
+            ORI = self._num_rot
+
+            for f in range(self._num_parts * self._num_rot):
+                thepart = f // ORI
+                ori = f % ORI 
+                for i in range(rotspread*2 + 1):
+                    between_feature_spreading[f,i] = thepart * ORI + (ori - rotspread + i) % ORI
+
+            bb = np.concatenate([between_feature_spreading, -np.ones((1, rotspread*2 + 1), dtype=np.int64)], 0)
+
+            # Update feature map
+            feature_map = bb[feature_map[...,0]]
+        
+        return feature_map
+
     def extract(self,X):
+        assert self._parts is not None, "Must be trained before calling extract"
+        
+        bedges_settings = self._settings['bedges']
+        radius = bedges_settings['radius']
+        X = self._extract_many_edges(bedges_settings, self._settings, X, must_preserve_size = True)
+        X = ag.features.bspread(X, spread=self._settings['bedges']['spread'], radius = self._settings['bedges']['radius'])
+
+        support_mask = np.ones(self._part_shape, dtype=np.bool)
+        th = self._settings['threshold']
+        n_coded = 1
+        from pnet.cyfuncs import code_index_map_general
+        feature_map = code_index_map_general(X, self._parts, support_mask.astype(np.uint8),th,outer_frame=self._settings['outer_frame'],n_coded = 1, standardize=self._settings.get('standardize',0),
+        min_percentile = self._settings.get('min_percentile',0.0))
+        
+        # Rotation spreading?
+        rotspread = self._settings.get('rotation_spreading_radius', 0)
+        if rotspread > 0:
+            between_feature_spreading = np.zeros((self._num_parts * self._num_rot , rotspread*2 + 1), dtype=np.int64)
+            ORI = self._num_rot
+
+            for f in range(self._num_parts * self._num_rot):
+                thepart = f // ORI
+                ori = f % ORI 
+                for i in range(rotspread*2 + 1):
+                    between_feature_spreading[f,i] = thepart * ORI + (ori - rotspread + i) % ORI
+
+            bb = np.concatenate([between_feature_spreading, -np.ones((1, rotspread*2 + 1), dtype=np.int64)], 0)
+
+            # Update feature map
+            feature_map = bb[feature_map[...,0]]
+        
+        return feature_map
+
+    def extract_old(self,X):
         print("+++++++++++++++++++++++++++++++++++++++++")
         assert self._parts is not None, "Must be trained before calling extract"
         assert self._bkg_probability is not None, "bkg probability is None"
@@ -115,7 +182,7 @@ class ModuloShiftingRotationPartsLayer(Layer):
         dataShape = X.shape
 
         print(X.shape)
-        block_size = 400
+        block_size = 100
         finalResult = np.empty((dataShape[0],dataShape[1]-self._sample_shape[0] +1 , dataShape[2] - self._sample_shape[1] + 1,1))
         num_block = int(np.ceil(dataShape[0]/block_size))
         print(self._sample_shape,self._part_shape)
@@ -217,7 +284,7 @@ class ModuloShiftingRotationPartsLayer(Layer):
         print(comps[:50,0])
         print(comps[:50,1])
         print(comps[50:150,2])
-        allShift = np.zeros(9)
+        allShift = np.zeros(25)
         for i in comps[:,2]:
             allShift[i]+=1
         print(allShift/np.sum(allShift))

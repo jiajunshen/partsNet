@@ -382,7 +382,7 @@ class OrientedPartsLayer(Layer):
             # This avoids hitting the outside of patches, even after rotating.
             # The 15 here is fairly arbitrary
             #avoid_edge = int(0 + np.max(ps)*np.sqrt(2))
-            avoid_edge = int(np.ceil(np.max(ps) * (np.sqrt(2) - 1) / (2 * np.sqrt(2))))
+            avoid_edge = int(np.ceil(np.max(ps) * (np.sqrt(2) - 1) / (2 * np.sqrt(2)))) + 2
             # This step assumes that the img -> edge process does not down-sample any
 
             # TODO: Maybe shuffle an iterator of the indices?
