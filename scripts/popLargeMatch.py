@@ -7,7 +7,7 @@ import os
 import pnet
 import matplotlib.pylab as plot
 from pnet.cyfuncs import index_map_pooling
-from queue import Queue
+from Queue import Queue
 def extract(ims,allLayers):
     #print(allLayers)
     curX = ims
@@ -30,7 +30,7 @@ def partsPool(originalPartsRegion, numParts):
 
 
 def test(ims,labels,net):
-    yhat = net.classify((ims,3000))
+    yhat = net.classify((ims,500))
     return yhat == labels
     
 
@@ -38,7 +38,8 @@ def test(ims,labels,net):
 #def trainPOP():
 if pnet.parallel.main(__name__):
     #X = np.load("testMay151.npy")
-    X = np.load("_3_100*6*6_1000*1*1_Jun_16_danny.npy")
+    #X = np.load("_3_100*6*6_1000*1*1_Jun_16_danny.npy")
+    X = np.load("original6*6 2.npy")
     model = X.item()
     # get num of Parts
     numParts = model['layers'][1]['num_parts']
@@ -68,7 +69,7 @@ if pnet.parallel.main(__name__):
 
 
     secondLayerCodedNumber = 0
-    secondLayerShape = 16
+    secondLayerShape = 12
     frame = (secondLayerShape - firstLayerShape)/2
     frame = int(frame)
     totalRange = 29 - firstLayerShape
@@ -85,7 +86,7 @@ if pnet.parallel.main(__name__):
     
         
     ##second-layer parts
-    numSecondLayerParts = 30
+    numSecondLayerParts = 10
     allPartsLayer = [[pnet.PartsLayer(numSecondLayerParts,(1,1),
                         settings=dict(outer_frame = 0, 
                         threshold = 5, 
@@ -124,7 +125,7 @@ if pnet.parallel.main(__name__):
     settings = {'interpolation':'nearest','cmap':plot.cm.gray,}
     settings['vmin'] = 0
     settings['vmax'] = 1
-    plotData = np.ones(((2 + numSecondLayerParts)*100+2,(2+numSecondLayerParts)*(numSecondLayerParts + 1)+2))*0.8
+    plotData = np.ones(((2 + numSecondLayerParts)*100+2,(2+secondLayerShape)*(numSecondLayerParts + 1)+2))*0.8
     visualShiftParts = 0
     if 0:
         allPartsPlot = np.zeros((20,numSecondLayerParts + 1,12,12))
@@ -135,7 +136,7 @@ if pnet.parallel.main(__name__):
         gr.images(allPartsPlot.reshape(20 * (numSecondLayerParts + 1),12,12),zero_to_one=False, vmin = 0, vmax =1)
     elif 1:
         for i in range(numSecondLayerParts + 1):
-            for j in range(100):
+            for j in range(numParts):
                 if i == 0:
                     plotData[5 + j * (2 + secondLayerShape):5+firstLayerShape + j * (2 + secondLayerShape), 5 + i * (2 + secondLayerShape): 5+firstLayerShape + i * (2 + secondLayerShape)] = partsPlot[j+visualShiftParts]
                 else:
@@ -173,7 +174,7 @@ if pnet.parallel.main(__name__):
     sup_ims = []
     sup_labels = []
     
-    classificationTrainingNum = 100
+    classificationTrainingNum = 1000
     for d in digits:
         ims0 = ag.io.load_mnist('training', [d], selection = slice(classificationTrainingNum), return_labels = False)
         sup_ims.append(ims0)
@@ -213,7 +214,7 @@ if pnet.parallel.main(__name__):
                     extractedFeaturePart = extract(np.array(secondLevelCurx[i,m,n][np.newaxis,:],dtype = np.uint8),secondLayerPartsLayer)[0]
                     thirdLevelCurx[i,m,n] = extractedFeaturePart
     print(thirdLevelCurx.shape)
-    
+    #np.save('thirdLevelCurx_LargeMatch.npy',thirdLevelCurx) 
     print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
     if 1:
         classificationLayers = [
@@ -282,7 +283,7 @@ if pnet.parallel.main(__name__):
         
         print("Final error rate:", format_error_rate(pr))
 
-
+        #np.save('thirdLevelCurx_Test.npy', thirdLevelCurTestX)
 
 
 

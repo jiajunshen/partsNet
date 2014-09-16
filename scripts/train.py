@@ -27,7 +27,7 @@ layers = [
     pnet.PartsLayer(100, (6, 6), settings=dict(outer_frame=0, 
                                               threshold=40, 
                                               samples_per_image=40, 
-                                              max_samples=10000, 
+                                              max_samples=100000, 
                                               min_prob=0.005)),
     pnet.PoolingLayer(shape=(4, 4), strides=(4, 4)),
     #    #pnet.SVMClassificationLayer(C=1.0),
@@ -40,9 +40,9 @@ layers = [
     #                                          n_coded=2
     #                                          )),
     #pnet.PoolingLayer(shape=(3,3), strides=(3, 3)),
-    pnet.MixtureClassificationLayer(n_components=1, min_prob=0.0001),
+    #pnet.MixtureClassificationLayer(n_components=1, min_prob=0.0001),
 
-    #pnet.SVMClassificationLayer(C=1.0)
+    pnet.SVMClassificationLayer(C=1.0)
 ]
 
 net = pnet.PartsNet(layers)
@@ -58,7 +58,7 @@ sup_ims = []
 sup_labels = []
 # Load supervised training data
 for d in digits:
-    ims0 = ag.io.load_mnist('training', [d], selection=slice(100), return_labels=False)
+    ims0 = ag.io.load_mnist('training', [d], selection=slice(10), return_labels=False)
     sup_ims.append(ims0)
     sup_labels.append(d * np.ones(len(ims0), dtype=np.int64))
 

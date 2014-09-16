@@ -7,7 +7,7 @@ import os
 import pnet
 import matplotlib.pylab as plot
 from pnet.cyfuncs import index_map_pooling
-from queue import Queue
+from Queue import Queue
 def extract(ims,allLayers):
     #print(allLayers)
     curX = ims

@@ -27,8 +27,10 @@ layers = [
     pnet.PartsLayer(100, (6, 6), settings=dict(outer_frame=0, 
                                               threshold=40, 
                                               samples_per_image=40, 
-                                              max_samples=1000000, 
-                                              min_prob=0.005)),
+                                              max_samples=100000, 
+                                              min_prob=0.005,
+                                              )),
+    
     #pnet.SequentialPartsLayer(100, (6,6), settings = dict(
     #                                            outer_frame = 0, 
     #                                            threshold = 40,
@@ -44,8 +46,8 @@ layers = [
                                                samples_per_image=200,
                                                max_samples=200000,
                                                min_prob=0.0005,
-    #                                          min_llh=-40,
-    #                                          n_coded=2
+                                              min_llh=-40,
+                                              n_coded=1
                                                   )),
     #pnet.PoolingLayer(shape=(2,2), strides=(2, 2)),
     
@@ -58,8 +60,8 @@ layers = [
     #                                          n_coded=2
     #                                          )),
     pnet.PoolingLayer(shape=(4,4), strides=(4, 4)),
-    pnet.MixtureClassificationLayer(n_components=1, min_prob=0.0001,block_size=200),
-    #pnet.SVMClassificationLayer(C=1.0)
+    #pnet.MixtureClassificationLayer(n_components=1, min_prob=0.0001,block_size=200),
+    pnet.SVMClassificationLayer(C=1.0)
 ]
 
 net = pnet.PartsNet(layers)

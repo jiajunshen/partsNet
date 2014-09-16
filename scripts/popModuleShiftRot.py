@@ -7,7 +7,7 @@ import os
 import pnet
 import matplotlib.pylab as plot
 from pnet.cyfuncs import index_map_pooling
-from queue import Queue
+from Queue import Queue
 def extract(ims,allLayers):
     #print(allLayers)
     curX = ims
@@ -30,7 +30,7 @@ def partsPool(originalPartsRegion, numParts):
 
 
 def test(ims,labels,net):
-    yhat = net.classify((ims,1000))
+    yhat = net.classify((ims,800))
     return yhat == labels
     
 
@@ -42,7 +42,7 @@ if pnet.parallel.main(__name__):
     #X = np.load("original6*6.npy")
     #X = np.load("sequential6*6.npy")
     #X = np.load("Jul22ModuloShiftRot.npy")
-    X = np.load("Jul22ModuloShiftRot20K.npy")
+    X = np.load("Modulo_shift_Rot_p10s66r8ms55tp10000fr0th80.npy")
     model = X.item()
     # get num of Parts
     numParts = model['layers'][0]['num_parts']
@@ -69,7 +69,7 @@ if pnet.parallel.main(__name__):
     #extractedFeature = shiftRotationLayer.extract_without_edges(patches.reshape((trainingDataNum * num_rot, secondLayerShape, secondLayerShape, 8)))[0]
     extractedFeature = shiftRotationLayer.extract_without_edges_batch(patches.reshape((trainingDataNum * num_rot, secondLayerShape, secondLayerShape, 8)))[0]
     print(extractedFeature.shape)
-    print(extractedFeature.reshape(trainingDataNum,4,7,7,1)[:20,:,2,2,0]) 
+    #print(extractedFeature.reshape(trainingDataNum,4,7,7,1)[:20,:,2,2,0]) 
     permutation = np.empty((num_rot,num_rot * codeShape * codeShape),np.int_)
     for a in range(num_rot):
         if a == 0:
@@ -172,7 +172,7 @@ if pnet.parallel.main(__name__):
         allPartsPlot[:,1:,:,:] = allPartsLayerImg[20:40]
         gr.images(allPartsPlot.reshape(20 * (numSecondLayerParts + 1),12,12),zero_to_one=False, vmin = 0, vmax =1)
     elif 1:
-        for i in range(numSecondLayerParts):
+        for i in range(numSecondLayerParts + 1):
             for j in range(numParts):
                 if 0:#i == 0:
                     plotData[5 + j * (2 + secondLayerShape):5+firstLayerShape + j * (2 + secondLayerShape), 5 + i * (2 + secondLayerShape): 5+firstLayerShape + i * (2 + secondLayerShape)] = shiftRotationLayer._visparts[j+visualShiftParts]

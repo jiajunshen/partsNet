@@ -7,7 +7,7 @@ import os
 import pnet
 import matplotlib.pylab as plot
 from pnet.cyfuncs import index_map_pooling
-from queue import Queue
+from Queue import Queue
 def extract(ims,allLayers):
     #print(allLayers)
     curX = ims
@@ -30,8 +30,12 @@ def partsPool(originalPartsRegion, numParts):
 
 
 def test(ims,labels,net):
-    yhat = net.classify((ims,2000))
+    yhat = net.classify((ims,500))
     return yhat == labels
+
+def testInvestigation(ims, labels, net):
+    yhat = net.classify((ims,500))
+    return np.where(yhat!=labels), yhat
     
 
 
@@ -39,7 +43,7 @@ def test(ims,labels,net):
 if pnet.parallel.main(__name__):
     #X = np.load("testMay151.npy")
     #X = np.load("_3_100*6*6_1000*1*1_Jun_16_danny.npy")
-    X = np.load("original6*6.npy")
+    X = np.load("original6*6 2.npy")
     #X = np.load("sequential6*6.npy")
     model = X.item()
     # get num of Parts
@@ -92,13 +96,15 @@ if pnet.parallel.main(__name__):
     np.save('/var/tmp/partsRegionOriginalJun29.npy',newPartsRegion)
     np.save('/var/tmp/imgRegionOriginalJun29.npy',imgRegion)
     ##second-layer parts
-    numSecondLayerParts = 20
+    numSecondLayerParts = 10
     allPartsLayer = [[pnet.PartsLayer(numSecondLayerParts,(1,1),
                         settings=dict(outer_frame = 0, 
                         threshold = 5, 
                         sample_per_image = 1, 
                         max_samples=10000, 
-                        min_prob = 0.005))] 
+                        min_prob = 0.005,
+                        #min_llh = -40
+                        ))] 
                         for i in range(numParts)]
     allPartsLayerImg = np.zeros((numParts,numSecondLayerParts,secondLayerShape,secondLayerShape))
     allPartsLayerImgNumber = np.zeros((numParts,numSecondLayerParts))
@@ -123,36 +129,39 @@ if pnet.parallel.main(__name__):
         for j in range(numSecondLayerParts):
             if(allPartsLayerImgNumber[i,j]):
                 allPartsLayerImg[i,j] = allPartsLayerImg[i,j]/allPartsLayerImgNumber[i,j]
-    np.save("exPartsOriginalJun29.npy",allPartsLayer)
+    #np.save("exPartsOriginalJun29.npy",allPartsLayer)
     
-    """
-    Visualize the SuperParts
-    """
-    settings = {'interpolation':'nearest','cmap':plot.cm.gray,}
-    settings['vmin'] = 0
-    settings['vmax'] = 1
-    plotData = np.ones(((2 + secondLayerShape)*100+2,(2+secondLayerShape)*(numSecondLayerParts + 1)+2))*0.8
-    visualShiftParts = 0
+
+
     if 0:
-        allPartsPlot = np.zeros((20,numSecondLayerParts + 1,12,12))
-        gr.images(partsPlot.reshape(numParts,6,6),zero_to_one=False,vmin = 0, vmax = 1)
-        allPartsPlot[:,0] = 0.5
-        allPartsPlot[:,0,3:9,3:9] = partsPlot[20:40]
-        allPartsPlot[:,1:,:,:] = allPartsLayerImg[20:40]
-        gr.images(allPartsPlot.reshape(20 * (numSecondLayerParts + 1),12,12),zero_to_one=False, vmin = 0, vmax =1)
-    elif 1:
-        for i in range(numSecondLayerParts + 1):
-            for j in range(100):
-                if i == 0:
-                    plotData[5 + j * (2 + secondLayerShape):5+firstLayerShape + j * (2 + secondLayerShape), 5 + i * (2 + secondLayerShape): 5+firstLayerShape + i * (2 + secondLayerShape)] = partsPlot[j+visualShiftParts]
-                else:
-                    plotData[2 + j * (2 + secondLayerShape):2 + secondLayerShape+ j * (2 + secondLayerShape),2 + i * (2 + secondLayerShape): 2+ secondLayerShape + i * (2 + secondLayerShape)] = allPartsLayerImg[j+visualShiftParts,i-1]
-        plot.figure(figsize=(10,40))
-        plot.axis('off')
-        plot.imshow(plotData, **settings)
-        plot.savefig('originalExParts.pdf',format='pdf',dpi=900)
-    else:
-        pass
+        """
+        Visualize the SuperParts
+        """
+        settings = {'interpolation':'nearest','cmap':plot.cm.gray,}
+        settings['vmin'] = 0
+        settings['vmax'] = 1
+        plotData = np.ones(((2 + secondLayerShape)*100+2,(2+secondLayerShape)*(numSecondLayerParts + 1)+2))*0.8
+        visualShiftParts = 0
+        if 0:
+            allPartsPlot = np.zeros((20,numSecondLayerParts + 1,12,12))
+            gr.images(partsPlot.reshape(numParts,6,6),zero_to_one=False,vmin = 0, vmax = 1)
+            allPartsPlot[:,0] = 0.5
+            allPartsPlot[:,0,3:9,3:9] = partsPlot[20:40]
+            allPartsPlot[:,1:,:,:] = allPartsLayerImg[20:40]
+            gr.images(allPartsPlot.reshape(20 * (numSecondLayerParts + 1),12,12),zero_to_one=False, vmin = 0, vmax =1)
+        elif 1:
+            for i in range(numSecondLayerParts + 1):
+                for j in range(numParts):
+                    if i == 0:
+                        plotData[5 + j * (2 + secondLayerShape):5+firstLayerShape + j * (2 + secondLayerShape), 5 + i * (2 + secondLayerShape): 5+firstLayerShape + i * (2 + secondLayerShape)] = partsPlot[j+visualShiftParts]
+                    else:
+                        plotData[2 + j * (2 + secondLayerShape):2 + secondLayerShape+ j * (2 + secondLayerShape),2 + i * (2 + secondLayerShape): 2+ secondLayerShape + i * (2 + secondLayerShape)] = allPartsLayerImg[j+visualShiftParts,i-1]
+            plot.figure(figsize=(10,40))
+            plot.axis('off')
+            plot.imshow(plotData, **settings)
+            plot.savefig('originalExParts_2.pdf',format='pdf',dpi=900)
+        else:
+            pass
 
 
 
@@ -202,10 +211,14 @@ if pnet.parallel.main(__name__):
                     thirdLevelCurx[i,m,n] = -1
     
     print(thirdLevelCurx.shape)
-    #return thirdLevelCurx,allPartsLayerImg 
+    #return thirdLevelCurx,allPartsLayerImg
+    
+    #np.save('thirdLevelCurx.npy',thirdLevelCurx)
+    
+     
     if 1:
         classificationLayers = [
-                            pnet.PoolingLayer(shape = (4,4),strides = (4,4)),
+                            pnet.PoolingLayer(shape = (8,8),strides = (8,8)),
                             #pnet.MixtureClassificationLayer(n_components = 5, min_prob = 1e-7, block_size = 20)
                             pnet.SVMClassificationLayer(C=1.0)
         ]
@@ -269,30 +282,73 @@ if pnet.parallel.main(__name__):
         print(end-afterPool)
         print(thirdLevelCurTestX.shape)
         testImg_Input = np.array(thirdLevelCurTestX[:,:,:,np.newaxis],dtype = np.int64) 
-        testImg_batches = np.array_split(testImg_Input,200)
-        testLabels_batches = np.array_split(testLabels, 200)
+        wrongIndex, resultLabels = testInvestigation(testImg_Input, testLabels, classificationNet)
+        wrongIndex = wrongIndex[0]
+        print(wrongIndex.shape)
+
         
-        args = [tup + (classificationNet,) for tup in zip(testImg_batches,testLabels_batches)]
+        if 1:
+            testImg_batches = np.array_split(testImg_Input,200)
+            testLabels_batches = np.array_split(testLabels, 200)
+            
+            args = [tup + (classificationNet,) for tup in zip(testImg_batches,testLabels_batches)]
+            
+            corrects = 0
+            total = 0
+            
+            def format_error_rate(pr):
+                return "{:.2f}%".format(100 * (1-pr))
+
+            print("Testing Starting...")
+            for i, res in enumerate(pnet.parallel.starmap_unordered(test,args)):
+                if i !=0 and i % 20 ==0:
+                    print("{0:05}/{1:05} Error rate: {2}".format(total, len(ims),format_error_rate(pr)))
+
+                corrects += res.sum()
+                total += res.size
+
+                pr = corrects / total
+            
+            print("Final error rate:", format_error_rate(pr))
         
-        corrects = 0
-        total = 0
-        
-        def format_error_rate(pr):
-            return "{:.2f}%".format(100 * (1-pr))
+        if 0:
+            gr.images(testImg[wrongIndex],show=False,zero_to_one =True, fileName = "mistakeOnes")
+            a = np.zeros((wrongIndex.shape[0]//18 + 1, 18))
+            b = np.zeros((wrongIndex.shape[0]//18 + 1, 18))
+            for i in range(wrongIndex.shape[0]//18+1): 
+                for j in range(18):
+                    if i * 18 +j <wrongIndex.shape[0]:
+                        a[i,j] = resultLabels[wrongIndex[i*18 + j]]
+                        b[i,j] = testLabels[wrongIndex[i*18 + j]]
+            
+            print(a)
+            print(b)
+            print("==================================================")
+            settings = {'interpolation':'nearest','cmap':plot.cm.gray,}
+            settings['vmin'] = 0
+            settings['vmax'] = 1
+            
+            plotData = np.ones(((10 + (2 + secondLayerShape) * (29 - secondLayerShape)) * 18 + 10,(10 + (2 + secondLayerShape) * (29 - secondLayerShape)) * 18 + 10)) * 0.8
+            for p in range(18):
+                for q in range(18):
+                    i = 5 * p + q
+                    if i >= wrongIndex.shape[0]:
+                        break;
+                    for m in range(29 - secondLayerShape):
+                        for n in range(29 - secondLayerShape):
+                            partCoded = thirdLevelCurTestX[wrongIndex[i],m,n]
+                            secondLayerPartsCoded = partCoded % numSecondLayerParts
+                            firstLayerParts = (partCoded - secondLayerPartsCoded) / numSecondLayerParts
+                            if(secondLevelCurTestXCenter[i,m,n]!=-1):
+                                plotData[ (10 + (2 + secondLayerShape) * (29 - secondLayerShape)) * p + (2 + secondLayerShape) * m: (10 + (2 + secondLayerShape) * (29 - secondLayerShape)) * p + (2 + secondLayerShape) * m + 12, (10 + (2 + secondLayerShape) * (29 - secondLayerShape)) * q + (2 + secondLayerShape) * n:(10 + (2 + secondLayerShape) * (29 - secondLayerShape)) * q + (2 + secondLayerShape) * n + 12] = allPartsLayerImg[firstLayerParts,secondLayerPartsCoded]
+            
 
-        print("Testing Starting...")
-        for i, res in enumerate(pnet.parallel.starmap_unordered(test,args)):
-            if i !=0 and i % 20 ==0:
-                print("{0:05}/{1:05} Error rate: {2}".format(total, len(ims),format_error_rate(pr)))
-
-            corrects += res.sum()
-            total += res.size
-
-            pr = corrects / total
-        
-        print("Final error rate:", format_error_rate(pr))
-
-
+            plot.figure(figsize=(25,25))
+            plot.axis('off')
+            plot.imshow(plotData,**settings)
+            plot.savefig('visualizePatchesCodedtoExParts_2.pdf',format='pdf',dpi = 900)
+             
+                    
 
 
 
