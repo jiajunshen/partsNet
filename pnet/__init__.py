@@ -15,6 +15,7 @@ from .parts_net import PartsNet
 from .oriented_parts_layer import OrientedPartsLayer
 from .mixture_classification_layer import MixtureClassificationLayer
 from .svm_classification_layer import SVMClassificationLayer
+from .extensionParts_layer.py
 from . import plot
 
 try:
