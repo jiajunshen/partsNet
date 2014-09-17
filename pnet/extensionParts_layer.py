@@ -9,6 +9,7 @@ import itertools as itr
 import amitgroup as ag
 from pnet.layer import Layer
 import pnet
+from pnet.cyfuncs import index_map_pooling
 
 @Layer.register('extensionParts_layer')
 class ExtensionPartsLayer(Layer):
@@ -23,53 +24,65 @@ class ExtensionPartsLayer(Layer):
         self._train_info = {}
 
     def extract(self,X):
-        assert self._parts is not None, "Must be trained before calling extract"
+        assert self._classificationLayers is not None, "Must be trained before calling extract"
+        X, num_parts = X
         assert X.ndim == 4, "Input X dimension is not correct"
+        assert num_parts == self._num_lower_parts
 
-        secondLevelCurx = np.zeros((X.shape[0], X.shape[1] - self._part_shape[0], X.shape[2] - self._part_shape[1],1,1,self._num_lower_parts))
-        secondLevelCurxCenter = np.zeros((X.shape[0], X.shape[1] - self._part_shape[0], X.shape[2] - self._part_shape[1]))
+        X = X.reshape((X.shape[0], X.shape[1], X.shape[2]))
+
+        secondLevelCurx = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1],1,1,self._num_lower_parts))
+        secondLevelCurxCenter = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
 
 
-        extractedFeature = np.empty((X.shape[0],X.shape[1] - self._part_shape[0],X.shape[2] - self._part_shape[1]))
+        extractedFeature = np.empty((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
         totalRange = X.shape[1]
         frame = (self._part_shape[0] - self._lowerLayerShape[0]) / 2
         frame = int(frame)
 
         for m in range(totalRange)[frame:totalRange-frame]:
             for n in range(totalRange)[frame:totalRange-frame]:
-                secondLevelCurx[:m-frame,n-frame] = index_map_pooling(X[:,m-frame:m+frame+1,n-frame:n+frame+1],self._num_lower_parts, (2 * frame + 1, 2 * frame + 1), (2 * frame + 1, 2 * frame + 1))
+                secondLevelCurx[:,m-frame,n-frame] = index_map_pooling(X[:,m-frame:m+frame+1,n-frame:n+frame+1],self._num_lower_parts, (2 * frame + 1, 2 * frame + 1), (2 * frame + 1, 2 * frame + 1))
                 secondLevelCurxCenter[:,m-frame,n-frame] = X[:,m,n]
         
         for i in range(X.shape[0]):
             patch = X[i]
-            for m in range(patch.shape[0] - self._part_shape[0]):
-                for n in range(patch.shape[1] - self._part_shape[1]):
+            for m in range(patch.shape[0] + self._lowerLayerShape[0]- self._part_shape[0]):
+                for n in range(patch.shape[1] + self._lowerLayerShape[1] - self._part_shape[1]):
                     if(secondLevelCurxCenter[i,m,n]!=-1):
                         firstLevelPartIndex = secondLevelCurxCenter[i,m,n]
                         firstLevelPartIndex = int(firstLevelPartIndex)
-                        extractedFeaturePart = codeParts(np.array(secondLevelCurx[i,m,n][np.newaxis,:], dtype = np.uint8), self._classificationLayers[firstLevelPartIndex])[0]
+                        extractedFeaturePart = self.codeParts(np.array(secondLevelCurx[i,m,n][np.newaxis,:], dtype = np.uint8), self._classificationLayers[firstLevelPartIndex])[0]
                         extractedFeature[i,m,n] = int(self._num_components * firstLevelPartIndex + extractedFeaturePart)
                     else:
                         extractedFeature[i,m,n] = -1
-        
+        extractedFeature = np.array(extractedFeature[:,:,:,np.newaxis],dtype = np.int64)
         return (extractedFeature,self._num_parts)
         
-    def codeParts(ims, allLayers):
+    def codeParts(self,ims, allLayers):
         curX = ims
         for layer in allLayers:
-            curX = alyer.extract(curX)
+            curX = layer.extract(curX)
         return curX
 
     @property
     def trained(self):
-        return self._parts is not None 
+        return self._classificationLayers is not None 
 
     def train(self, X, Y=None, OriginalX = None):
-        assert Y is None
-        assert X.ndim == 4
         
+        X_data, num_lower_parts = X
+        
+
+        assert Y is None
+        
+        assert X_data.ndim == 4
+
+        assert num_lower_parts == self._num_lower_parts
+        
+        X_data = X_data.reshape((X_data.shape[0],X_data.shape[1],X_data.shape[2]))
         #Extract Patches
-        partsRegion = _extract_patches(X)
+        partsRegion = self._extract_patches(X_data)
         
         #Train Patches 
         ag.info('Done extracting patches')
@@ -77,7 +90,7 @@ class ExtensionPartsLayer(Layer):
         return self._train_patches(partsRegion)
 
 
-    def _extract_patches(X):
+    def _extract_patches(self,X):
         
         ag.info('Extract Patches: Seperate coded regions into groups')
         trainingDataNum = X.shape[0]
@@ -87,18 +100,15 @@ class ExtensionPartsLayer(Layer):
         partsRegion = [[] for x in range(self._num_lower_parts)]
 
         
-        for i in range(trainingData):
+        for i in range(trainingDataNum):
             for m in range(totalRange)[frame:totalRange - frame]:
                 for n in range(totalRange)[frame:totalRange - frame]:
                     if(X[i,m,n]!=-1):
-                        partsGrid = partsPool(X[i,m-frame:m+frame+1,n-frame:n+frame+1], self._num_lower_parts)
+                        partsGrid = self.partsPool(X[i,m-frame:m+frame+1,n-frame:n+frame+1], self._num_lower_parts)
                         partsRegion[X[i,m,n]].append(partsGrid)
         return partsRegion
 
-    def _train_patches(partsRegion):
-        newPartsRegion = []
-        for i in range(numParts):
-            newPartsRegion.append(np.asarray(partsRegion[i], dtype = np.uint8))
+    def _train_patches(self,partsRegion):
         allPartsLayer = [[pnet.PartsLayer(self._num_components,(1,1),
                     settings=dict(outer_frame = 0,
                     threshold = 5,
@@ -114,7 +124,7 @@ class ExtensionPartsLayer(Layer):
             allPartsLayer[i][0].train_from_samples(np.array(partsRegion[i]),None)
         self._classificationLayers = allPartsLayer
     
-    def partsPool(originalPartsRegion, numParts):
+    def partsPool(self,originalPartsRegion, numParts):
         partsGrid = np.zeros((1,1,numParts))
         for i in range(originalPartsRegion.shape[0]):
             for j in range(originalPartsRegion.shape[1]):
@@ -185,8 +195,7 @@ class ExtensionPartsLayer(Layer):
 
     @classmethod
     def load_from_dict(cls, d):
-        obj = cls(d['num_parts'], d['num_components'],d['part_shape'], d['lowerLayerShape'], settings=d['settings'])
-        obj._num_lower_parts = d['num_lower_parts']
+        obj = cls(d['num_lower_parts'], d['num_components'],d['part_shape'], d['lowerLayerShape'], settings=d['settings'])
         obj._classificationLayers = d['classificationLayers']
         obj._train_info = d['train_info']
         return obj
