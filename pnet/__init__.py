@@ -16,6 +16,7 @@ from .oriented_parts_layer import OrientedPartsLayer
 from .mixture_classification_layer import MixtureClassificationLayer
 from .svm_classification_layer import SVMClassificationLayer
 from .extensionParts_layer import ExtensionPartsLayer
+from .extensionPooling_layer import ExtensionPoolingLayer
 from . import plot
 
 try:
