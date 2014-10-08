@@ -165,7 +165,7 @@ class BernoulliMM(BaseEstimator):
     """
     def __init__(self, n_components=1,
                  random_state=None, thresh=1e-6, min_prob=1e-2, min_num=30,
-                 n_iter=100,tol=1e-6, n_init=1, params='wm', init_params='wm',blocksize=0,
+                 n_iter=100,tol=1e-6, n_init=1, params='wm', init_params='wm',joint=False, blocksize=0, 
                  float_type=np.float64,
                  binary_type=np.uint8, verbose=False):
         # TODO: opt_type='expected'
@@ -183,11 +183,13 @@ class BernoulliMM(BaseEstimator):
         self.verbose=verbose
         # blocksize controls whether we do the likelihood computation in blocks to prevent memory blowup
         self.blocksize = blocksize
+        self.joint=joint
         if self.n_init < 1:
             raise ValueError('BernoulliMM estimation requires at least one run')
 
         self.weights_ = np.ones(self.n_components,dtype=self.float_type)/ self.n_components
         self.converged_ = False
+        self.joint_probability=None
 
 
 
@@ -491,7 +493,8 @@ class BernoulliMM(BaseEstimator):
                     max_log_prob = log_likelihood[-1]
                     best_params = {'weights': self.weights_,
                                    'means' : self.means_}
-
+            if self.joint:
+                self._calculate_joint_probability(X,responsibilities,self.params,self.min_prob)
 
 
         # check the existence of an init param that was not subject to
@@ -557,8 +560,57 @@ class BernoulliMM(BaseEstimator):
 
 
         return weights
+    def _calculate_joint_probability(self, X, responsibilities, params, min_prob=1e-7):
+        """Perform the calculation of joint probability of each position
+        """
+        print("start calculate the joint_probability")
+        weights = responsibilities.sum(axis=0)
+        X_revise = np.zeros((X.shape[0],3,2,2,X.shape[1]//4,X.shape[1]//4))
+        numDimension = X.shape[1]//4
+        for n in range(X.shape[0]):
+            print(n)
+            X = X.reshape((X.shape[0],2,2,numDimension))
+            for p in range(2):
+                for q in range(2):
+                    b = np.matrix(np.ones(numDimension))
+                    X_information = np.matrix(X[n,p,q])
+                    #print(X_information)
+                    X_information_matrix = b.transpose() * X_information
+                    #print(X_information_matrix)
+                    X_information_matrix_transpose = X_information_matrix.transpose()
+                    X_matrix = X_information_matrix + X_information_matrix_transpose
+                    X_revise[n,0,p,q][X_matrix==0] = 1
+                    X_revise[n,1,p,q][X_matrix==1] = 1
+                    X_revise[n,2,p,q][X_matrix==2] = 1
+        
+        X = X.reshape((X.shape[0],-1))
+        X_revise = X_revise.reshape((X_revise.shape[0],-1))
+        if self.blocksize > 0:
+            #print("Multiplication For blocks")
+            weighted_X_Joint_sum=np.zeros((weights.shape[0],3 * 2 * 2 * numDimension * numDimension),dtype=self.float_type)
+            jointBlockSize = 2000
+            if self.verbose:
+                print("Running block multiplication for mstep")
 
+            for blockstart in range(0,weighted_X_Joint_sum.shape[1],jointBlockSize):
+                print("running step",blockstart,weighted_X_Joint_sum.shape[1],jointBlockSize)
+                blockend=min(weighted_X_Joint_sum.shape[1],blockstart+jointBlockSize)
+                res = responsibilities.T
+                print(res.shape,X_revise[:,blockstart:blockend].shape,blockend-blockstart)
+                inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
+                weighted_X_Joint_sum[:,blockstart:blockend] = np.matrix(res)*np.matrix(X_revise[:,blockstart:blockend])
+                weighted_X_Joint_sum[:,blockstart:blockend] = np.clip(weighted_X_Joint_sum[:,blockstart:blockend] * inverse_weights,min_prob,1-min_prob)
 
+        else:
+            weighted_X_Joint_sum = np.dot(responsibilities.T, X_revise)
+        #inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
+        print(inverse_weights.shape)
+                    
+        #self.joint_probability = np.clip(weighted_X_Joint_sum * inverse_weights,min_prob,1-min_prob)
+        self.joint_probability = weighted_X_Joint_sum
+        print("out calculate")
+        #print(self.means_)
+        #print(np.sum(self.means_ - temp))
 
     def _n_parameters(self):
         """Return the number of free parameters in the model"""

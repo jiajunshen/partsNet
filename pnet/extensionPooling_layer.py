@@ -37,19 +37,42 @@ class ExtensionPoolingLayer(Layer):
             self._getPoolMatrix(weights,X.shape[1:])
         elif self._grouping_type == 'mixture_model':
             #pass
-            mixtureModel = BernoulliMM(n_components = 100, n_iter = 10, n_init = 1, random_state = 0, min_prob = 0.005, blocksize = 5)
+            mixtureModel = BernoulliMM(n_components = 100, n_iter = 10, n_init = 1, random_state = 0, min_prob = 0.005, joint=True,blocksize = 4)
             mixtureModel.fit(X.reshape((X.shape[0],-1)))
             print("mixtureModelweights")
             print(mixtureModel.weights_.shape)
             weights = mixtureModel.means_.reshape((mixtureModel.n_components,-1))
             weights = np.swapaxes(weights,0,1)
+            joint_probability = mixtureModel.joint_probability
+            component_weights = mixtureModel.weights_
+            print(joint_probability.shape)
             if self._save_weights_file is not None:
                 np.save(self._save_weights_file,weights)
             plt.hist(mixtureModel.weights_)
             plt.show()
-            self._getPoolMatrix(weights, X.shape[1:])
+            #self._getPoolMatrix(weights, X.shape[1:])
+            self._getPoolMatrixByMutual(weights, X.shape[1:],joint_probability,component_weights)
             #TODO: write mixture model weights generating.
         
+    def _getPoolMatrixByMutual(self,weights_vector,data_shape,joint_probability,component_weights):
+        n_hiddenNodes = weights_vector.shape[1]
+        assert self._n_parts == data_shape[2]
+        weights_vector = weights_vector.reshape((data_shape[0],data_shape[1],self._n_parts, n_hiddenNodes))
+        distanceMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
+        poolMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
+        joint_probability = joint_probability.reshape((n_hiddenNodes,3,data_shape[0],data_shape[1],self._n_parts,self._n_parts))
+        for i in range(data_shape[0]):
+            for j in range(data_shape[1]):
+                for p in range(self._n_parts):
+                    for q in range(self._n_parts):
+                        mutualInformation = np.sum((np.log(joint_probability[:,:,i,j,p,q]) - np.log(weights_vector[i,j,p,:])[:,np.newaxis] - np.log(weights_vector[i,j,q,:])[:,np.newaxis]) * joint_probability[:,:,i,j,p,q],axis = 1)
+                        distance = np.sum(component_weights * mutualInformation,axis = 0)
+                        distanceMatrix[i,j,p,q] = distance
+                    poolMatrix[i,j,p] = np.argsort(distanceMatrix[i,j,p,:])
+        self._pooling_matrix = np.array(poolMatrix,dtype = np.int)
+        plt.hist(distanceMatrix[0,0,1,:])
+        plt.show()
+
 
     def _getPoolMatrix(self,weights_vector,data_shape):
         n_hiddenNodes = weights_vector.shape[1]
