@@ -38,13 +38,13 @@ class PartsLayer(Layer):
         constant_terms = np.apply_over_axes(np.sum, np.log(1-self._parts).astype(np.float64), [1, 2, 3]).ravel()
 
         from pnet.cyfuncs import code_index_map_multi
-        print(X.shape)
+        #print(X.shape)
         feature_map = code_index_map_multi(X, part_logits, constant_terms, th,
                                            outer_frame=self._settings['outer_frame'], 
                                            min_llh=self._settings.get('min_llh', -np.inf),
                                            n_coded=self._settings.get('n_coded', 1))
 
-        print(feature_map.shape)
+        #print(feature_map.shape)
         return (feature_map, self._num_parts)
     @property
     def trained(self):

@@ -26,7 +26,7 @@ class PartsNet(Layer):
             #    print(curX[1])
             if not (not layer.supervised or (layer.supervised and Y is not None)):
                 break
-
+            print(layer)
             if not layer.trained:
                 ag.info('Training layer {}...'.format(l))
                 layer.train(curX, Y=Y, OriginalX=X)
@@ -52,7 +52,13 @@ class PartsNet(Layer):
         curX = X
         for layer in self._layers:
             if not layer.classifier or classify:
-                curX = layer.extract(curX) 
+                curX = layer.extract(curX)
+                if 0:
+                    if isinstance(curX,tuple):
+                        print(curX[0].shape)
+                    else:
+                        print(curX.shape)
+        print(curX.shape) 
         return curX
 
     def infoplot(self, vz):

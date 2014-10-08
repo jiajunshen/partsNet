@@ -27,7 +27,7 @@ layers = [
     pnet.PartsLayer(100, (6, 6), settings=dict(outer_frame=0, 
                                               threshold=40, 
                                               samples_per_image=40, 
-                                              max_samples=1000000, 
+                                              max_samples=10000, 
                                               min_prob=0.005,
                                               )),
     
@@ -35,14 +35,14 @@ layers = [
     pnet.PoolingLayer(shape=(8,8), strides=(8, 8)),
     #pnet.MixtureClassificationLayer(n_components=1, min_prob=0.0001,block_size=200),
     #pnet.ExtensionPoolingLayer(n_parts = 1000, grouping_type='mixture_model',pooling_type = 'distance', pooling_distance = 5, weights_file = './weights100Hidden_pool8*8.npy',save_weights_file = None, settings = {}),
-    pnet.ExtensionPoolingLayer(n_parts = 1000, grouping_type='mixture_model',pooling_type = 'distance', pooling_distance = 5, weights_file = None, save_weights_file = None, settings = {}),
+    pnet.ExtensionPoolingLayer(n_parts = 1000, grouping_type='mixture_model',pooling_type = 'distance', pooling_distance = 5, weights_file = None, save_weights_file = "./mixtureweights100Hidden_pool8*8.npy", settings = {}),
     pnet.SVMClassificationLayer(C=1.0)
 ]
 
 net = pnet.PartsNet(layers)
 
 digits = range(10)
-ims = ag.io.load_mnist('training', selection=slice(10000), return_labels=False)
+ims = ag.io.load_mnist('training', selection=slice(200), return_labels=False)
 
 #print(net.sizes(X[[0]]))
 
@@ -52,7 +52,7 @@ sup_ims = []
 sup_labels = []
 # Load supervised training data
 for d in digits:
-    ims0 = ag.io.load_mnist('training', [d], selection=slice(10), return_labels=False)
+    ims0 = ag.io.load_mnist('training', [d], selection=slice(100), return_labels=False)
     sup_ims.append(ims0)
     sup_labels.append(d * np.ones(len(ims0), dtype=np.int64))
 
