@@ -46,10 +46,8 @@ class ExtensionPoolingLayer(Layer):
             joint_probability = mixtureModel.joint_probability
             component_weights = mixtureModel.weights_
             print(joint_probability.shape)
-            if self._save_weights_file is not None:
-                np.save(self._save_weights_file,weights)
-            plt.hist(mixtureModel.weights_)
-            plt.show()
+            #plt.hist(mixtureModel.weights_)
+            #plt.show()
             #self._getPoolMatrix(weights, X.shape[1:])
             self._getPoolMatrixByMutual(weights, X.shape[1:],joint_probability,component_weights)
             #TODO: write mixture model weights generating.
@@ -70,8 +68,10 @@ class ExtensionPoolingLayer(Layer):
                         distanceMatrix[i,j,p,q] = distance
                     poolMatrix[i,j,p] = np.argsort(distanceMatrix[i,j,p,:])
         self._pooling_matrix = np.array(poolMatrix,dtype = np.int)
-        plt.hist(distanceMatrix[0,0,1,:])
-        plt.show()
+        if self._save_weights_file is not None:
+            np.save(self._save_weights_file,distanceMatrix)
+        #plt.hist(distanceMatrix[0,0,1,:])
+        #plt.show()
 
 
     def _getPoolMatrix(self,weights_vector,data_shape):

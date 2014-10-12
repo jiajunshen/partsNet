@@ -114,13 +114,8 @@ class ModuloShiftingRotationPartsLayer(Layer):
         th = self._settings['threshold']
         n_coded = 1
         from pnet.cyfuncs import code_index_map_general
-<<<<<<< HEAD
-        feature_map = code_index_map_general(X, self._parts, support_mask.astype(np.uint8),th,outer_frame=self._settings['outer_frame'],n_coded = 1, standardize=self._settings.get('standardize',0),
-        min_percentile = self._settings.get('min_percentile',0.0))
-=======
         feature_map = code_index_map_general(X, self._parts, support_mask.astype(np.uint8),th,outer_frame=self._settings['outer_frame'],n_coded = 1, standardize=self._settings.get('standardize',0)
         , min_percentile = self._settings.get('min_percentile',0.0))
->>>>>>> c8855f8812f6a38aabec40451826e36f6738cfc2
         
         # Rotation spreading?
         rotspread = self._settings.get('rotation_spreading_radius', 0)
