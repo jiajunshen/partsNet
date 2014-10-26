@@ -190,6 +190,7 @@ class BernoulliMM(BaseEstimator):
         self.weights_ = np.ones(self.n_components,dtype=self.float_type)/ self.n_components
         self.converged_ = False
         self.joint_probability=None
+        self.posterior = None
 
 
 
@@ -537,6 +538,7 @@ class BernoulliMM(BaseEstimator):
         else:
             weighted_X_sum = np.dot(responsibilities.T, X)
         inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
+        inverse_X = 1.0 / (np.mean(X.reshape((X.shape[0],-1)),axis = 0) + 10 * EPS)
         if 'w' in params:
             #print("weights")
             #print(self.weights_)
@@ -553,6 +555,13 @@ class BernoulliMM(BaseEstimator):
             #print(np.sum(self.means_ - np.clip(weighted_X_sum*inverse_weights,min_prob,1-min_prob))) 
                     
             self.means_ = np.clip(weighted_X_sum * inverse_weights,min_prob,1-min_prob)
+            print(np.min(self.weights_))
+            print(np.swapaxes((weighted_X_sum * inverse_weights).reshape((self.n_components,-1)),0,1).dtype)
+            self.posterior = np.swapaxes((np.clip(weighted_X_sum * inverse_weights,10 * EPS, 1-10*EPS)).reshape((self.n_components,-1)),0,1) * self.weights_ * inverse_X[:,np.newaxis]
+            print("********************")
+            #print(self.posterior.shape)
+            #print(np.sum(self.posterior,axis = 1))
+            print(np.mean(np.sum(self.posterior,axis = 1)))
             #print(self.means_)
             #print(np.sum(self.means_ - temp))
             
@@ -565,56 +574,48 @@ class BernoulliMM(BaseEstimator):
         """
         print("start calculate the joint_probability")
         weights = responsibilities.sum(axis=0)
-        X_original = X
-        numDimension = X_original.shape[1]//4
-        weighted_X_Joint_sum=np.zeros((weights.shape[0],3 * 2 * 2 * numDimension * numDimension),dtype=self.float_type)
+        X_revise = np.zeros((X.shape[0],3,2,2,X.shape[1]//4,X.shape[1]//4))
+        numDimension = X.shape[1]//4
+        for n in range(X.shape[0]):
+            print(n)
+            X = X.reshape((X.shape[0],2,2,numDimension))
+            for p in range(2):
+                for q in range(2):
+                    b = np.matrix(np.ones(numDimension))
+                    X_information = np.matrix(X[n,p,q])
+                    #print(X_information)
+                    X_information_matrix = b.transpose() * X_information
+                    #print(X_information_matrix)
+                    X_information_matrix_transpose = X_information_matrix.transpose()
+                    X_matrix = X_information_matrix + X_information_matrix_transpose
+                    X_revise[n,0,p,q][X_matrix==0] = 1
+                    X_revise[n,1,p,q][X_matrix==1] = 1
+                    X_revise[n,2,p,q][X_matrix==2] = 1
         
+        X = X.reshape((X.shape[0],-1))
+        X_revise = X_revise.reshape((X_revise.shape[0],-1))
         if self.blocksize > 0:
-            for outerBlockStart in range(0,X_original.shape[0],self.blocksize):
-                outerBlockEnd = min(X_original.shape[0],outerBlockStart + self.blocksize)
-                X = X_original[outerBlockStart:outerBlockEnd]
+            #print("Multiplication For blocks")
+            weighted_X_Joint_sum=np.zeros((weights.shape[0],3 * 2 * 2 * numDimension * numDimension),dtype=self.float_type)
+            jointBlockSize = 2000
+            if self.verbose:
+                print("Running block multiplication for mstep")
 
-                X_revise = np.zeros((X.shape[0],3,2,2,X.shape[1]//4,X.shape[1]//4))
-                numDimension = X.shape[1]//4
-                for n in range(X.shape[0]):
-                    print(n)
-                    X = X.reshape((X.shape[0],2,2,numDimension))
-                    for p in range(2):
-                        for q in range(2):
-                            b = np.matrix(np.ones(numDimension))
-                            X_information = np.matrix(X[n,p,q])
-                            #print(X_information)
-                            X_information_matrix = b.transpose() * X_information
-                            #print(X_information_matrix)
-                            X_information_matrix_transpose = X_information_matrix.transpose()
-                            X_matrix = X_information_matrix + X_information_matrix_transpose
-                            X_revise[n,0,p,q][X_matrix==0] = 1
-                            X_revise[n,1,p,q][X_matrix==1] = 1
-                            X_revise[n,2,p,q][X_matrix==2] = 1
-                
-                X = X.reshape((X.shape[0],-1))
-                X_revise = X_revise.reshape((X_revise.shape[0],-1))
-                if self.blocksize > 0:
-                    #print("Multiplication For blocks")
-                    jointBlockSize = 200
-                    if self.verbose:
-                        print("Running block multiplication for mstep")
+            for blockstart in range(0,weighted_X_Joint_sum.shape[1],jointBlockSize):
+                print("running step",blockstart,weighted_X_Joint_sum.shape[1],jointBlockSize)
+                blockend=min(weighted_X_Joint_sum.shape[1],blockstart+jointBlockSize)
+                res = responsibilities.T
+                print(res.shape,X_revise[:,blockstart:blockend].shape,blockend-blockstart)
+                inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
+                weighted_X_Joint_sum[:,blockstart:blockend] = np.matrix(res)*np.matrix(X_revise[:,blockstart:blockend])
+                weighted_X_Joint_sum[:,blockstart:blockend] = np.clip(weighted_X_Joint_sum[:,blockstart:blockend] * inverse_weights,min_prob,1-min_prob)
 
-                    for blockstart in range(0,weighted_X_Joint_sum.shape[1],jointBlockSize):
-                        print("running step",blockstart,weighted_X_Joint_sum.shape[1],jointBlockSize)
-                        blockend=min(weighted_X_Joint_sum.shape[1],blockstart+jointBlockSize)
-                        res = responsibilities[outerBlockStart:outerBlockEnd].T
-                        print(res.shape,X_revise[:,blockstart:blockend].shape,blockend-blockstart)
-                        inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
-                        weighted_X_Joint_sum[:,blockstart:blockend] += np.matrix(res)*np.matrix(X_revise[:,blockstart:blockend])
-
-                else:
-                    weighted_X_Joint_sum = np.dot(responsibilities.T, X_revise)
-        inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
-        for blockstart in range(0,weighted_X_Joint_sum.shape[1],200):
-            blockend = min(weighted_X_Joint_sum.shape[1],blockstart+200)
-            weighted_X_Joint_sum[:,blockstart:blockend] = np.clip(weighted_X_Joint_sum[:,blockstart:blockend] * inverse_weights,min_prob,1-min_prob)
-
+        else:
+            weighted_X_Joint_sum = np.dot(responsibilities.T, X_revise)
+        #inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
+        print(inverse_weights.shape)
+                    
+        #self.joint_probability = np.clip(weighted_X_Joint_sum * inverse_weights,min_prob,1-min_prob)
         self.joint_probability = weighted_X_Joint_sum
         print("out calculate")
         #print(self.means_)
