@@ -37,19 +37,30 @@ class ExtensionPoolingLayer(Layer):
             self._getPoolMatrix(weights,X.shape[1:])
         elif self._grouping_type == 'mixture_model':
             #pass
-            mixtureModel = BernoulliMM(n_components = 100, n_iter = 10, n_init = 1, random_state = 0, min_prob = 0.005, joint=True,blocksize = 4)
+            mixtureModel = BernoulliMM(n_components = 200, n_iter = 30, n_init = 2, random_state = self._settings.get('em_seed', 0), min_prob = 0.005, joint=False,blocksize = 4)
             mixtureModel.fit(X.reshape((X.shape[0],-1)))
             print("mixtureModelweights")
             print(mixtureModel.weights_.shape)
+            print(np.sum(mixtureModel.weights_))
             weights = mixtureModel.means_.reshape((mixtureModel.n_components,-1))
             weights = np.swapaxes(weights,0,1)
-            joint_probability = mixtureModel.joint_probability
+            #joint_probability = mixtureModel.joint_probability
             component_weights = mixtureModel.weights_
-            print(joint_probability.shape)
+            posterior = mixtureModel.posterior
+            print(np.sum(posterior,axis = 1))
+            print("posterior")
+            print(posterior.shape)
+            #print(joint_probability.shape)
+            if self._save_weights_file is not None:
+                #np.save(self._save_weights_file,weights)
+                np.save(self._save_weights_file,posterior)
+                np.save("./modelWeights.npy",mixtureModel.weights_)
+                np.save("./modelMeans.npy",weights)
             #plt.hist(mixtureModel.weights_)
             #plt.show()
-            #self._getPoolMatrix(weights, X.shape[1:])
-            self._getPoolMatrixByMutual(weights, X.shape[1:],joint_probability,component_weights)
+            weights = posterior
+            self._getPoolMatrix(weights, X.shape[1:])
+            #self._getPoolMatrixByMutual(weights, X.shape[1:],joint_probability,component_weights)
             #TODO: write mixture model weights generating.
         
     def _getPoolMatrixByMutual(self,weights_vector,data_shape,joint_probability,component_weights):
@@ -68,8 +79,6 @@ class ExtensionPoolingLayer(Layer):
                         distanceMatrix[i,j,p,q] = distance
                     poolMatrix[i,j,p] = np.argsort(distanceMatrix[i,j,p,:])
         self._pooling_matrix = np.array(poolMatrix,dtype = np.int)
-        if self._save_weights_file is not None:
-            np.save(self._save_weights_file,distanceMatrix)
         #plt.hist(distanceMatrix[0,0,1,:])
         #plt.show()
 
