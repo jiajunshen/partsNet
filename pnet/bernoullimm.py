@@ -555,10 +555,10 @@ class BernoulliMM(BaseEstimator):
             #print(np.sum(self.means_ - np.clip(weighted_X_sum*inverse_weights,min_prob,1-min_prob))) 
                     
             self.means_ = np.clip(weighted_X_sum * inverse_weights,min_prob,1-min_prob)
-            print(np.min(self.weights_))
-            print(np.swapaxes((weighted_X_sum * inverse_weights).reshape((self.n_components,-1)),0,1).dtype)
+            #print(np.min(self.weights_))
+            #print(np.swapaxes((weighted_X_sum * inverse_weights).reshape((self.n_components,-1)),0,1).dtype)
             self.posterior = np.swapaxes((np.clip(weighted_X_sum * inverse_weights,10 * EPS, 1-10*EPS)).reshape((self.n_components,-1)),0,1) * self.weights_ * inverse_X[:,np.newaxis]
-            print("********************")
+            #print("********************")
             #print(self.posterior.shape)
             #print(np.sum(self.posterior,axis = 1))
             print(np.mean(np.sum(self.posterior,axis = 1)))

@@ -65,7 +65,7 @@ class PartsLayer(Layer):
         flatpatches = patches.reshape((patches.shape[0], -1))
         
         if 1:
-            mm = BernoulliMM(n_components=self._num_parts, n_iter=20, tol=1e-15,n_init=2, random_state=0, min_prob=min_prob, verbose=False)
+            mm = BernoulliMM(n_components=self._num_parts, n_iter=20, tol=1e-15,n_init=2, random_state=self._settings.get('em_seed',0), min_prob=min_prob, verbose=False)
             mm.fit(flatpatches)
             print(mm.fit(flatpatches))
             print('AIC', mm.aic(flatpatches))

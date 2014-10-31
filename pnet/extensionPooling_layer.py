@@ -28,13 +28,13 @@ class ExtensionPoolingLayer(Layer):
     def train(self, X, Y = None, OriginalX = None):
         if(self._weights_file) is not None:
             weights = np.load(self._weights_file)
-            self._getPoolMatrix(weights,X.shape[1:])
+            self._getPoolMatrix(weights,X.shape[1:], X)
         elif self._grouping_type == 'rbm':
             rbmModel = testRBM(X.reshape(X.shape[0],-1))
             weights = rbmModel.W.get_value(borrow=True)
             if self._save_weights_file is not None:
                 np.save(self._save_weights_file,weights)
-            self._getPoolMatrix(weights,X.shape[1:])
+            self._getPoolMatrix(weights,X.shape[1:], X)
         elif self._grouping_type == 'mixture_model':
             #pass
             mixtureModel = BernoulliMM(n_components = 200, n_iter = 30, n_init = 2, random_state = self._settings.get('em_seed', 0), min_prob = 0.005, joint=False,blocksize = 4)
@@ -47,9 +47,9 @@ class ExtensionPoolingLayer(Layer):
             #joint_probability = mixtureModel.joint_probability
             component_weights = mixtureModel.weights_
             posterior = mixtureModel.posterior
-            print(np.sum(posterior,axis = 1))
-            print("posterior")
-            print(posterior.shape)
+            #print(np.sum(posterior,axis = 1))
+            #print("posterior")
+            #print(posterior.shape)
             #print(joint_probability.shape)
             if self._save_weights_file is not None:
                 #np.save(self._save_weights_file,weights)
@@ -59,7 +59,7 @@ class ExtensionPoolingLayer(Layer):
             #plt.hist(mixtureModel.weights_)
             #plt.show()
             weights = posterior
-            self._getPoolMatrix(weights, X.shape[1:])
+            self._getPoolMatrix(weights, X.shape[1:], X)
             #self._getPoolMatrixByMutual(weights, X.shape[1:],joint_probability,component_weights)
             #TODO: write mixture model weights generating.
         
@@ -83,13 +83,13 @@ class ExtensionPoolingLayer(Layer):
         #plt.show()
 
 
-    def _getPoolMatrix(self,weights_vector,data_shape):
+    def _getPoolMatrix(self,weights_vector,data_shape, X):
         n_hiddenNodes = weights_vector.shape[1]
         assert self._n_parts == data_shape[2]
         weights_vector = weights_vector.reshape((data_shape[0],data_shape[1],self._n_parts, n_hiddenNodes))
         distanceMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
         poolMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
-
+        partsCodedNum = np.sum(X.reshape((X.shape[0] * X.shape[1] * X.shape[2], X.shape[3])), axis = 0)
         #Change the following part to cython
         for i in range(data_shape[0]):
             for j in range(data_shape[1]):
