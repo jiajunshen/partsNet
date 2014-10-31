@@ -17,6 +17,7 @@ from .mixture_classification_layer import MixtureClassificationLayer
 from .svm_classification_layer import SVMClassificationLayer
 from .extensionParts_layer import ExtensionPartsLayer
 from .extensionPooling_layer import ExtensionPoolingLayer
+from .rbm import RBM
 from . import plot
 
 try:

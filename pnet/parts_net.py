@@ -55,10 +55,12 @@ class PartsNet(Layer):
                 curX = layer.extract(curX)
                 if 0:
                     if isinstance(curX,tuple):
-                        print(curX[0].shape)
+                        #print(curX[0].shape)
+                        pass
                     else:
-                        print(curX.shape)
-        print(curX.shape) 
+                        pass
+                        #print(curX.shape)
+        #print(curX.shape) 
         return curX
 
     def infoplot(self, vz):
