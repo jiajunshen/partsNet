@@ -109,8 +109,9 @@ class ExtensionPartsLayer(Layer):
         return partsRegion
 
     def _train_patches(self,partsRegion):
-        allPartsLayer = [[pnet.PartsLayer(self._num_components,(1,1),
+        allPartsLayer = [[pnet.PartsLayer(self._num_components,(2,1),
                     settings=dict(outer_frame = 0,
+                    em_seed = self._settings.get('em_seed',0),
                     threshold = 5,
                     sample_per_image = 1,
                     max_samples=10000,

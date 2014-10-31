@@ -25,7 +25,7 @@ class SVMClassificationLayer(SupervisedLayer):
         Xflat = X.reshape((X.shape[0], -1))
         return self._svm.predict(Xflat) 
 
-    def train(self, X, Y):
+    def train(self, X, Y, OriginalX = None):
         Xflat = X.reshape((X.shape[0], -1))
         if self._penalty is None:
             Cs = 10**np.linspace(-1, -4, 10)
