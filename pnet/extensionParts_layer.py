@@ -22,7 +22,8 @@ class ExtensionPartsLayer(Layer):
         self._settings = settings
         self._classificationLayers = None
         self._train_info = {}
-
+        self._partsDistance = None
+    
     def extract(self,X):
         assert self._classificationLayers is not None, "Must be trained before calling extract"
         X, num_parts = X
@@ -124,6 +125,7 @@ class ExtensionPartsLayer(Layer):
                 continue
             allPartsLayer[i][0].train_from_samples(np.array(partsRegion[i]),None)
         self._classificationLayers = allPartsLayer
+        self._calculateKLDistance()
     
     def partsPool(self,originalPartsRegion, numParts):
         partsGrid = np.zeros((1,1,numParts))
@@ -132,6 +134,29 @@ class ExtensionPartsLayer(Layer):
                 if(originalPartsRegion[i,j]!=-1):
                     partsGrid[0,0,originalPartsRegion[i,j]] = 1
         return partsGrid
+
+    def _calculateKLDistance(self):
+        allParts = []
+        for i in range(self._num_lower_parts):
+            for j in range(self._classificationLayers[i][0]._num_parts):
+                newParts = self._classificationLayers[i][0]._parts[j]
+                #print("newparts shape")
+                #print(newParts.shape)
+                #print("newparts centerPart probability")
+                #print(newParts[0,0,i])
+                newParts[0,0,i] = 0.5
+                allParts.append(self._classificationLayers[i][0]._parts[j])
+        allParts = np.array(allParts)
+        distance = np.zeros((self._num_parts, self._num_parts))
+        for i in range(self._num_parts):
+            for j in range(self._num_parts):
+                distance[i,j] = KLDistance(allParts[i],allParts[j]) + KLDistance(allParts[j], allParts[i])
+
+        self._partsDistance = distance
+        distanceFile = self._settings.get('distanceFile','../scripts/extensionPartsDistance.npy')
+        np.save(distanceFile, self._partsDistance)
+         
+        
 
 
     def infoplot(self, vz):
@@ -192,6 +217,7 @@ class ExtensionPartsLayer(Layer):
         d['settings'] = self._settings
         d['classificationLayers'] = self._classificationLayers
         d['train_info'] = self._train_info
+        d['partsDistance'] = self._partsDistance
         return d
 
     @classmethod
@@ -199,4 +225,10 @@ class ExtensionPartsLayer(Layer):
         obj = cls(d['num_lower_parts'], d['num_components'],d['part_shape'], d['lowerLayerShape'], settings=d['settings'])
         obj._classificationLayers = d['classificationLayers']
         obj._train_info = d['train_info']
+        obj._partsDistance = d['partsDistance']
         return obj
+
+def KLDistance(p,q):
+    p = np.ravel(p)
+    q = np.ravel(q)
+    return np.sum(p * np.log(p/q))

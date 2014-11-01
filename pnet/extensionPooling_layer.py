@@ -26,7 +26,7 @@ class ExtensionPoolingLayer(Layer):
         return self._pooling_matrix is not None
 
     def train(self, X, Y = None, OriginalX = None):
-        if(self._weights_file) is not None:
+        if self._weights_file is not None and self._grouping_type!= 'KLDistance':
             weights = np.load(self._weights_file)
             self._getPoolMatrix(weights,X.shape[1:], X)
         elif self._grouping_type == 'rbm':
@@ -62,6 +62,9 @@ class ExtensionPoolingLayer(Layer):
             self._getPoolMatrix(weights, X.shape[1:], X)
             #self._getPoolMatrixByMutual(weights, X.shape[1:],joint_probability,component_weights)
             #TODO: write mixture model weights generating.
+        elif self._grouping_type == 'KLDistance':
+            distanceFile = np.load(self._weights_file)
+            self._getPoolMatrixByDistance(distanceFile, X.shape[1:], X)
         
     def _getPoolMatrixByMutual(self,weights_vector,data_shape,joint_probability,component_weights):
         n_hiddenNodes = weights_vector.shape[1]
@@ -90,7 +93,8 @@ class ExtensionPoolingLayer(Layer):
         distanceMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
         poolMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
         partsCodedNum = np.sum(X.reshape((X.shape[0] * X.shape[1] * X.shape[2], X.shape[3])), axis = 0)
-        #Change the following part to cython
+        
+        #TODO: Change the following part to cython
         for i in range(data_shape[0]):
             for j in range(data_shape[1]):
                 for p in range(self._n_parts):
@@ -100,7 +104,25 @@ class ExtensionPoolingLayer(Layer):
                         distance = np.sqrt(np.sum((thisPoint - thatPoint) * (thisPoint - thatPoint)))
                         distanceMatrix[i,j,p,q] = distance
                     poolMatrix[i,j,p] = np.argsort(distanceMatrix[i,j,p,:])
+                    for index in range(self._n_parts):
+                        poolToPart = poolMatrix[i,j,p,index]
+                        if(partsCodedNum[poolToPart]<5):
+                            poolMatrix[i,j,p,index] = p #Actually it makes more sense if we set it equal to -1. But in order to make [Reference: 01] easier, we set it equals to p here.    Reference Number : 02
+
         self._pooling_matrix = np.array(poolMatrix,dtype=np.int)
+
+    def _getPoolMatrixByDistance(self, distanceMatrix, data_shape, X):
+        partsCodedNum = np.sum(X.reshape((X.shape[0] * X.shape[1] * X.shape[2], X.shape[3])), axis = 0)
+
+        poolMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts,self._n_parts))
+        for p in range(self._n_parts):
+            poolMatrix[:,:,p] = np.argsort(distanceMatrix[p,:])
+            for index in range(self._n_parts):
+                poolToPart = poolMatrix[0,0,p,index]
+                if(partsCodedNum[poolToPart]<5):
+                    poolMatrix[:,:,p,index] = p # Refer to [Reference: 02]
+
+        self._pooling_matrix = np.array(poolMatrix, dtype = np.int)
 
     def extract(self,X):
         assert self._pooling_matrix is not None, "Must be trained before calling extract"
@@ -113,7 +135,7 @@ class ExtensionPoolingLayer(Layer):
                     for m in range(X.shape[3]):
                         if X[k,i,j,m] == 1:
                             if self._pooling_type == 'distance':
-                                X[k,i,j,:][self._pooling_matrix[i,j,m,:self._pooling_distance]] = 1
+                                X[k,i,j,:][self._pooling_matrix[i,j,m,:self._pooling_distance]] = 1#                              Reference Number: 01
                             #elif self._pooling_type == 'probability':
                             #    PooledLocation = poolByProbability(self._pooling_matrix[i,j,m,:se])
                             #    X[k,i,j,:]
