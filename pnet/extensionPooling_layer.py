@@ -105,7 +105,9 @@ class ExtensionPoolingLayer(Layer):
                         distanceMatrix[i,j,p,q] = distance
                     poolMatrix[i,j,p] = np.argsort(distanceMatrix[i,j,p,:])
                     for index in range(self._n_parts):
-                        poolToPart = poolMatrix[i,j,p,index]
+                        poolToPart = int(poolMatrix[i,j,p,index])
+                        print("poolMatrix Num Investigation")
+                        print(index, poolToPart,partsCodedNum[poolToPart])
                         if(partsCodedNum[poolToPart]<5):
                             poolMatrix[i,j,p,index] = p #Actually it makes more sense if we set it equal to -1. But in order to make [Reference: 01] easier, we set it equals to p here.    Reference Number : 02
 
@@ -118,7 +120,7 @@ class ExtensionPoolingLayer(Layer):
         for p in range(self._n_parts):
             poolMatrix[:,:,p] = np.argsort(distanceMatrix[p,:])
             for index in range(self._n_parts):
-                poolToPart = poolMatrix[0,0,p,index]
+                poolToPart = int(poolMatrix[0,0,p,index])
                 if(partsCodedNum[poolToPart]<5):
                     poolMatrix[:,:,p,index] = p # Refer to [Reference: 02]
 

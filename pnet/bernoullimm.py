@@ -561,7 +561,7 @@ class BernoulliMM(BaseEstimator):
             #print("********************")
             #print(self.posterior.shape)
             #print(np.sum(self.posterior,axis = 1))
-            print(np.mean(np.sum(self.posterior,axis = 1)))
+            #print(np.mean(np.sum(self.posterior,axis = 1)))
             #print(self.means_)
             #print(np.sum(self.means_ - temp))
             
