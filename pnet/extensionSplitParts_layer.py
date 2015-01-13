@@ -11,9 +11,9 @@ from pnet.layer import Layer
 import pnet
 from pnet.cyfuncs import index_map_pooling
 
-@Layer.register('extensionParts_layer')
-class ExtensionPartsLayer(Layer):
-    def __init__(self, num_parts, num_components, part_shape, lowerLayerShape, settings={}):
+@Layer.register('extensionSplitParts_layer')
+class ExtensionSplitPartsLayer(Layer):
+    def __init__(self, num_parts, num_components, part_shape, lowerLayerShape, overlapSize = 1, settings={}):
         self._num_parts = num_parts * num_components
         self._num_lower_parts = num_parts
         self._num_components = num_components
@@ -23,6 +23,7 @@ class ExtensionPartsLayer(Layer):
         self._classificationLayers = None
         self._train_info = {}
         self._partsDistance = None
+        self._overlapSize = overlapSize
     
     def extract(self,X):
         assert self._classificationLayers is not None, "Must be trained before calling extract"
@@ -37,9 +38,50 @@ class ExtensionPartsLayer(Layer):
 
 
         extractedFeature = np.empty((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
+
+
+
+
         totalRange = X.shape[1]
         frame = (self._part_shape[0] - self._lowerLayerShape[0]) / 2
         frame = int(frame)
+        partsRegion = [[] for x in range(self._num_lower_parts),[] for x in range(self._num_lower_parts),[] for x in range(self._num_lower_parts),[] for x in range(self._num_lower_parts)]
+        
+        subRegionSize = (totalRange + self._overlapSize)//2
+        for i in range(trainingDataNum):
+            for a in range(2):
+                for b in range(2):
+                    for m in range(totalRange)[a * (totalRange - subRegionSize) + frame: a * (totalRange - subRegionSize)+ subRegionSize - frame]:
+                        for n in range(totalRange)[a * (totalRange - subRegionSize) + frame: a * (totalRange - subRegionSize) + subRegionSize - frame]:
+                            if(X[i,m,n]!=-1):
+                                partsGrid = self.partsPool(X[i,m-frame:m+frame+1, n-frame:n+frame+1], self._num_lower_parts)
+                                partsRegion[a * 2 + b, X[i,m,n]].append(partsGrid)
+        return partsRegion
+
+
+
+
+
+        for m in range(totalRange)[frame:totalRange-frame]:
+            for n in range(totalRange)[frame:totalRange-frame]:
+                secondLevelCurx[:,m-frame,n-frame] = index_map_pooling(X[:,m-frame:m+frame+1,n-frame:n+frame+1],self._num_lower_parts, (2 * frame + 1, 2 * frame + 1), (2 * frame + 1, 2 * frame + 1))
+                secondLevelCurxCenter[:,m-frame,n-frame] = X[:,m,n]
+
+
+
+
+
+
+        for a in range(2):
+            for b in range(2):
+                for m in range(totalRange)[a * (totalRange - subRegionSize) + frame: a * (totalRange - subRegionSize) + subRegionSize - frame]:
+                    for n in range(totalRange)[b * (totalRange - subRegionSize) + frame: b * (totalRange - subRegionSize) + subRegionSize - frame]:
+                        secondLevelindex_map_pooling(X[:,m-frame:m+frame+1,n-frame:n+frame+1],self._num_lower_parts, (2 * frame + 1, 2 * frame + 1), (2 * frame + 1, 2 * frame + 1))
+
+
+
+
+
 
         for m in range(totalRange)[frame:totalRange-frame]:
             for n in range(totalRange)[frame:totalRange-frame]:
@@ -88,7 +130,9 @@ class ExtensionPartsLayer(Layer):
         #Train Patches 
         ag.info('Done extracting patches')
         #ag.info('Training patches', patches.shape)
-        return self._train_patches(partsRegion)
+        self._classificationLayers = [[],[],[],[]]
+        for i in range(4):
+            self._train_patches(partsRegion[i],i)
 
 
     def _extract_patches(self,X):
@@ -98,18 +142,21 @@ class ExtensionPartsLayer(Layer):
         totalRange = X.shape[1]
         frame = (self._part_shape[0] - self._lowerLayerShape[0]) / 2
         frame = int(frame)
-        partsRegion = [[] for x in range(self._num_lower_parts)]
-
+        partsRegion = [[] for x in range(self._num_lower_parts),[] for x in range(self._num_lower_parts),[] for x in range(self._num_lower_parts),[] for x in range(self._num_lower_parts)]
         
+        subRegionSize = (totalRange + self._overlapSize)//2
         for i in range(trainingDataNum):
-            for m in range(totalRange)[frame:totalRange - frame]:
-                for n in range(totalRange)[frame:totalRange - frame]:
-                    if(X[i,m,n]!=-1):
-                        partsGrid = self.partsPool(X[i,m-frame:m+frame+1,n-frame:n+frame+1], self._num_lower_parts)
-                        partsRegion[X[i,m,n]].append(partsGrid)
+            for a in range(2):
+                for b in range(2):
+                    for m in range(totalRange)[a * (totalRange - subRegionSize) + frame: a * (totalRange - subRegionSize)+ subRegionSize - frame]:
+                        for n in range(totalRange)[a * (totalRange - subRegionSize) + frame: a * (totalRange - subRegionSize) + subRegionSize - frame]:
+                            if(X[i,m,n]!=-1):
+                                partsGrid = self.partsPool(X[i,m-frame:m+frame+1, n-frame:n+frame+1], self._num_lower_parts)
+                                partsRegion[a * 2 + b, X[i,m,n]].append(partsGrid)
         return partsRegion
 
-    def _train_patches(self,partsRegion):
+
+    def _train_patches(self,partsRegion,location):
         allPartsLayer = [[pnet.PartsLayer(self._num_components,(1,1),
                     settings=dict(outer_frame = 0,
                     em_seed = self._settings.get('em_seed',0),
@@ -124,7 +171,7 @@ class ExtensionPartsLayer(Layer):
             if(not partsRegion[i]):
                 continue
             allPartsLayer[i][0].train_from_samples(np.array(partsRegion[i]),None)
-        self._classificationLayers = allPartsLayer
+        self._classificationLayers[location] = allPartsLayer
         self._calculateKLDistance()
     
     def partsPool(self,originalPartsRegion, numParts):
@@ -134,6 +181,7 @@ class ExtensionPartsLayer(Layer):
                 if(originalPartsRegion[i,j]!=-1):
                     partsGrid[0,0,originalPartsRegion[i,j]] = 1
         return partsGrid
+
 
     def _calculateKLDistance(self):
         allParts = []
@@ -153,8 +201,8 @@ class ExtensionPartsLayer(Layer):
                 distance[i,j] = KLDistance(allParts[i],allParts[j]) + KLDistance(allParts[j], allParts[i])
 
         self._partsDistance = distance
-        #distanceFile = self._settings.get('distanceFile','~/partsNet/scripts/extensionPartsDistance.npy')
-        #np.save(distanceFile, self._partsDistance)
+        distanceFile = self._settings.get('distanceFile','../scripts/extensionPartsDistance.npy')
+        np.save(distanceFile, self._partsDistance)
          
         
 

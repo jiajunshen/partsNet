@@ -68,8 +68,8 @@ class PartsLayer(Layer):
             mm = BernoulliMM(n_components=self._num_parts, n_iter=20, tol=1e-15,n_init=2, random_state=self._settings.get('em_seed',0), min_prob=min_prob, verbose=False)
             mm.fit(flatpatches)
             print(mm.fit(flatpatches))
-            print('AIC', mm.aic(flatpatches))
-            print('BIC', mm.bic(flatpatches))
+            #print('AIC', mm.aic(flatpatches))
+            #print('BIC', mm.bic(flatpatches))
             
             if 0:
                 # Draw samples
@@ -127,14 +127,21 @@ class PartsLayer(Layer):
         H = -np.apply_over_axes(np.mean, Hall, [1, 2, 3])[:,0,0,0]
 
         # Sort by entropy
-        II = np.argsort(H)
+        #II = np.argsort(H)
 
-        self._parts[:] = self._parts[II]
-        self._train_info['entropy'] = H[II]
+        #self._parts[:] = self._parts[II]
+        #self._train_info['entropy'] = H[II]
+        #self._weights[:] = self._weights[II]
 
     def _get_patches(self, X, OriginalX):
+        assert (X.ndim == 4 or X.ndim == 5)
+        if X.ndim == 4:
+            return self._get_grey_patches(X, OriginalX)
+        else:
+            return self._get_color_patches(X, OriginalX)
+
+    def _get_grey_patches(self, X, OriginalX):
         assert X.ndim == 4
-        assert OriginalX.ndim == 3
         samples_per_image = self._settings.get('samples_per_image', 20) 
         fr = self._settings['outer_frame']
         patches = []
@@ -168,6 +175,59 @@ class PartsLayer(Layer):
                         tot = patch[fr:-fr,fr:-fr].sum()
 
                     if th <= tot: 
+                        patches.append(patch)
+                        vispatch = OriginalXi[selection]
+                        span = vispatch.min(),vispatch.max()
+                        if span[1]-span[0] > 0:
+                            vispatch = (vispatch - span[0])/(span[1] - span[0])
+                        patches_original.append(vispatch)
+                        if len(patches) >= self._settings.get('max_samples', np.inf):
+                            return np.asarray(patches),np.asarray(patches_original)
+                        break
+
+                    if tries == N-1:
+                        ag.info('WARNING: {} tries'.format(N))
+
+        return np.asarray(patches),np.asarray(patches_original)
+
+    def _get_color_patches(self, X, OriginalX):
+        assert X.ndim == 5
+        assert OriginalX.ndim == 4
+        channel = X.shape[-1]
+
+        samples_per_image = self._settings.get('samples_per_image', 20) 
+        fr = self._settings['outer_frame']
+        patches = []
+        patches_original = []
+        rs = np.random.RandomState(self._settings.get('patch_extraction_seed', 0))
+
+        th = self._settings['threshold']
+
+        for i in range(X.shape[0]):
+            Xi = X[i]
+            OriginalXi = OriginalX[i]
+            # How many patches could we extract?
+            w, h = [Xi.shape[j]-self._part_shape[j]+1 for j in range(2)]
+
+            # TODO: Maybe shuffle an iterator of the indices?
+            indices = list(itr.product(range(w-1), range(h-1)))
+            rs.shuffle(indices)
+            i_iter = itr.cycle(iter(indices))
+
+            for sample in range(samples_per_image):
+                N = 200
+                for tries in range(N):
+                    x, y = next(i_iter)
+                    selection = [slice(x, x+self._part_shape[0]), slice(y, y+self._part_shape[1])]
+
+                    patch = Xi[selection]
+                    #edgepatch_nospread = edges_nospread[selection]
+                    if fr == 0:
+                        tot = patch.sum()
+                    else:
+                        tot = patch[fr:-fr,fr:-fr].sum()
+
+                    if th <= tot * channel: 
                         patches.append(patch)
                         vispatch = OriginalXi[selection]
                         span = vispatch.min(),vispatch.max()

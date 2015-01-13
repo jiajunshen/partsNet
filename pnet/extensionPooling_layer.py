@@ -37,13 +37,15 @@ class ExtensionPoolingLayer(Layer):
             self._getPoolMatrix(weights,X.shape[1:], X)
         elif self._grouping_type == 'mixture_model':
             #pass
-            mixtureModel = BernoulliMM(n_components = 200, n_iter = 30, n_init = 2, random_state = self._settings.get('em_seed', 0), min_prob = 0.005, joint=False,blocksize = 4)
+            mixtureModel = BernoulliMM(n_components = 1000, n_iter = 100, n_init = 2, random_state = self._settings.get('em_seed', 0), min_prob = 0.005, joint=False,blocksize = 100)
             mixtureModel.fit(X.reshape((X.shape[0],-1)))
             print("mixtureModelweights")
             print(mixtureModel.weights_.shape)
             print(np.sum(mixtureModel.weights_))
             weights = mixtureModel.means_.reshape((mixtureModel.n_components,-1))
+            #weights = np.log(weights/(1-weights))
             weights = np.swapaxes(weights,0,1)
+            
             #joint_probability = mixtureModel.joint_probability
             component_weights = mixtureModel.weights_
             posterior = mixtureModel.posterior
@@ -53,19 +55,48 @@ class ExtensionPoolingLayer(Layer):
             #print(joint_probability.shape)
             if self._save_weights_file is not None:
                 #np.save(self._save_weights_file,weights)
-                np.save(self._save_weights_file,posterior)
+                np.save(self._save_weights_file,weights)
                 np.save("./modelWeights.npy",mixtureModel.weights_)
-                np.save("./modelMeans.npy",weights)
+                np.save("./modelMeans.npy",mixtureModel.means_)
+                np.save("./modelPosterior.npy", posterior)
             #plt.hist(mixtureModel.weights_)
             #plt.show()
-            weights = posterior
-            self._getPoolMatrix(weights, X.shape[1:], X)
+            #weights = posterior
+            #self._getPoolMatrix(weights, X.shape[1:], X)
+            self._getPoolMatrixByKLDistance(weights, X.shape[1:], X)
             #self._getPoolMatrixByMutual(weights, X.shape[1:],joint_probability,component_weights)
             #TODO: write mixture model weights generating.
         elif self._grouping_type == 'KLDistance':
             distanceFile = np.load(self._weights_file)
             self._getPoolMatrixByDistance(distanceFile, X.shape[1:], X)
         
+    def _getPoolMatrixByKLDistance(self,weights_vector,data_shape, X):
+        n_hiddenNodes = weights_vector.shape[1]
+        assert self._n_parts == data_shape[2]
+        weights_vector = weights_vector.reshape((data_shape[0],data_shape[1],self._n_parts, n_hiddenNodes))
+        distanceMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
+        poolMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
+        partsCodedNum = np.sum(X, axis = 0)
+        
+        #TODO: Change the following part to cython
+        for i in range(data_shape[0]):
+            for j in range(data_shape[1]):
+                for p in range(self._n_parts):
+                    thisPoint = weights_vector[i,j,p,:]
+                    for q in range(self._n_parts):
+                        thatPoint = weights_vector[i,j,q,:]
+                        distance = KLDistance(thisPoint, thatPoint) + KLDistance(thatPoint, thisPoint)
+                        distanceMatrix[i,j,p,q] = distance
+                    poolMatrix[i,j,p] = np.argsort(distanceMatrix[i,j,p,:])
+                    for index in range(self._n_parts):
+                        poolToPart = int(poolMatrix[i,j,p,index])
+                        print("poolMatrix Num Investigation")
+                        print(index, poolToPart,partsCodedNum[i,j,poolToPart])
+                        if(partsCodedNum[i,j,poolToPart]<1):
+                            poolMatrix[i,j,p,index] = p #Actually it makes more sense if we set it equal to -1. But in order to make [Reference: 01] easier, we set it equals to p here.    Reference Number : 02
+
+        self._pooling_matrix = np.array(poolMatrix,dtype=np.int)
+    
     def _getPoolMatrixByMutual(self,weights_vector,data_shape,joint_probability,component_weights):
         n_hiddenNodes = weights_vector.shape[1]
         assert self._n_parts == data_shape[2]
@@ -92,7 +123,7 @@ class ExtensionPoolingLayer(Layer):
         weights_vector = weights_vector.reshape((data_shape[0],data_shape[1],self._n_parts, n_hiddenNodes))
         distanceMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
         poolMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts, self._n_parts))
-        partsCodedNum = np.sum(X.reshape((X.shape[0] * X.shape[1] * X.shape[2], X.shape[3])), axis = 0)
+        partsCodedNum = np.sum(X, axis = 0)
         
         #TODO: Change the following part to cython
         for i in range(data_shape[0]):
@@ -107,21 +138,21 @@ class ExtensionPoolingLayer(Layer):
                     for index in range(self._n_parts):
                         poolToPart = int(poolMatrix[i,j,p,index])
                         print("poolMatrix Num Investigation")
-                        print(index, poolToPart,partsCodedNum[poolToPart])
-                        if(partsCodedNum[poolToPart]<5):
+                        print(index, poolToPart,partsCodedNum[i,j,poolToPart])
+                        if(partsCodedNum[i,j,poolToPart]<1):
                             poolMatrix[i,j,p,index] = p #Actually it makes more sense if we set it equal to -1. But in order to make [Reference: 01] easier, we set it equals to p here.    Reference Number : 02
 
         self._pooling_matrix = np.array(poolMatrix,dtype=np.int)
 
     def _getPoolMatrixByDistance(self, distanceMatrix, data_shape, X):
-        partsCodedNum = np.sum(X.reshape((X.shape[0] * X.shape[1] * X.shape[2], X.shape[3])), axis = 0)
+        partsCodedNum = np.sum(X, axis = 0)
 
         poolMatrix = np.zeros((data_shape[0],data_shape[1],self._n_parts,self._n_parts))
         for p in range(self._n_parts):
             poolMatrix[:,:,p] = np.argsort(distanceMatrix[p,:])
             for index in range(self._n_parts):
                 poolToPart = int(poolMatrix[0,0,p,index])
-                if(partsCodedNum[poolToPart]<5):
+                if(np.sum(partsCodedNum[:,:,poolToPart])<1):
                     poolMatrix[:,:,p,index] = p # Refer to [Reference: 02]
 
         self._pooling_matrix = np.array(poolMatrix, dtype = np.int)
@@ -282,3 +313,7 @@ def test_rbm(datasets, learning_rate=0.1, training_epochs=30,
     print ('Training took %f minutes' % (pretraining_time / 60.))
     return rbm
 
+def KLDistance(p,q):
+    p = np.ravel(p)
+    q = np.ravel(q)
+    return np.sum(p * np.log(p/q))

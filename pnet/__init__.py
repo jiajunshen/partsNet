@@ -3,6 +3,7 @@ from .layer import Layer
 
 from .intensity_threshold_layer import IntensityThresholdLayer
 from .edge_layer import EdgeLayer
+from .colorEdge_layer import ColorEdgeLayer
 from .pooling_layer import PoolingLayer
 from .parts_layer import PartsLayer
 from .sequentialParts_layer import SequentialPartsLayer
