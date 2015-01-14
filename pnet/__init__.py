@@ -12,6 +12,7 @@ from .moduloShifting_Rotation_Parts_layer import ModuloShiftingRotationPartsLaye
 from .latentShiftEM import LatentShiftEM
 from .latentShiftRotationEM import LatentShiftRotationEM
 from .gaussian_parts_layer import GaussianPartsLayer
+from .oriented_gaussian_parts_layer import OrientedGaussianPartsLayer
 from .parts_net import PartsNet
 from .oriented_parts_layer import OrientedPartsLayer
 from .mixture_classification_layer import MixtureClassificationLayer

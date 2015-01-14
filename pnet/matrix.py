@@ -10,3 +10,13 @@ def rotation(a):
                       [np.sin(a), np.cos(a),  0],
                       [0,         0,          1]])
 
+
+def scale(sx, sy=None):
+    if sy is None:
+        sy = sx
+    return np.matrix([[sx, 0, 0], [0, sy, 0], [0, 0, 1]])
+
+def identity():
+    return np.matrix(np.eye(3))
+
+
