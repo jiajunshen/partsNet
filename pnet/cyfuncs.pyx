@@ -1489,4 +1489,249 @@ def code_index_map_binary_tree_keypoints(
     return out_map
 
 
+def calc_new_covar(np.ndarray[ndim=3, dtype=np.float64_t] X,
+                   np.ndarray[ndim=3, dtype=np.float64_t] means,
+                   np.ndarray[ndim=3, dtype=np.float64_t] resp,
+                   np.ndarray[ndim=2, dtype=np.int64_t] permutations):
+    cdef:
+        int N = X.shape[0]
+        int D = X.shape[2]
+        int K = means.shape[0]
+        int P = permutations.shape[0]
 
+
+        np.ndarray[ndim=2, dtype=np.float64_t] covars = np.zeros((D, D))
+
+        np.float64_t[:, :] covars_mv = covars
+        np.int64_t[:, :] permutations_mv = permutations
+        np.float64_t[:, :, :] means_mv = means
+        np.float64_t[:, :, :] resp_mv = resp
+        np.float64_t[:, :, :] X_mv = X
+
+        int n, k, p, shift, d1, d2, p0
+        np.float64_t v
+
+    with nogil:
+        for n in range(N):
+            for k in range(K):
+                for p in range(P):
+                #p = 0
+                    for shift in range(P):
+                        p0 = permutations_mv[shift, p]
+                        #u = X[n, p0] - means[k, p0]
+                        v = resp[n, k, shift]
+                        for d1 in range(D):
+                            for d2 in range(D):
+                                covars_mv[d1, d2] += v * \
+                                    (X_mv[n, p0, d1] - means_mv[k, p, d1]) * \
+                                    (X_mv[n, p0, d2] - means_mv[k, p, d2])
+
+    covars /= N * P
+    return covars
+
+def calc_new_covar_full(np.ndarray[ndim=3, dtype=np.float64_t] X,
+                        np.ndarray[ndim=3, dtype=np.float64_t] means,
+                        np.ndarray[ndim=3, dtype=np.float64_t] resp,
+                        np.ndarray[ndim=2, dtype=np.int64_t] permutations):
+    cdef:
+        int N = X.shape[0]
+        int D = X.shape[2]
+        int K = means.shape[0]
+        int P = permutations.shape[0]
+
+
+        np.ndarray[ndim=3, dtype=np.float64_t] covars = np.zeros((K, D, D))
+        np.ndarray[ndim=1, dtype=np.float64_t] tot_resp = np.zeros(K)
+
+        np.float64_t[:, :, :] covars_mv = covars
+        np.float64_t[:] tot_resp_mv = tot_resp
+        np.int64_t[:, :] permutations_mv = permutations
+        np.float64_t[:, :, :] means_mv = means
+        np.float64_t[:, :, :] resp_mv = resp
+        np.float64_t[:, :, :] X_mv = X
+
+        int n, k, p, shift, d1, d2, p0
+        np.float64_t v
+
+    with nogil:
+        for n in range(N):
+            for k in range(K):
+                for p in range(P):
+                #p = 0
+                    for shift in range(P):
+                        p0 = permutations_mv[shift, p]
+                        #u = X[n, p0] - means[k, p0]
+                        v = resp[n, k, shift]
+                        tot_resp_mv[k] += v
+                        for d1 in range(D):
+                            for d2 in range(D):
+                                covars_mv[k, d1, d2] += v * \
+                                    (X_mv[n, p0, d1] - means_mv[k, p, d1]) * \
+                                    (X_mv[n, p0, d2] - means_mv[k, p, d2])
+
+    covars /= tot_resp[:, np.newaxis, np.newaxis]
+    return covars
+
+def calc_new_covar_fullfull(np.ndarray[ndim=3, dtype=np.float64_t] X,
+                            np.ndarray[ndim=3, dtype=np.float64_t] means,
+                            np.ndarray[ndim=3, dtype=np.float64_t] resp,
+                            np.ndarray[ndim=2, dtype=np.int64_t] permutations):
+    cdef:
+        int N = X.shape[0]
+        int D = X.shape[2]
+        int K = means.shape[0]
+        int P = permutations.shape[0]
+
+
+        np.ndarray[ndim=4, dtype=np.float64_t] covars = np.zeros((K, P, D, D))
+        np.ndarray[ndim=2, dtype=np.float64_t] tot_resp = np.zeros((K, P))
+
+        np.float64_t[:, :, :, :] covars_mv = covars
+        np.float64_t[:, :] tot_resp_mv = tot_resp
+        np.int64_t[:, :] permutations_mv = permutations
+        np.float64_t[:, :, :] means_mv = means
+        np.float64_t[:, :, :] resp_mv = resp
+        np.float64_t[:, :, :] X_mv = X
+
+        int n, k, p, shift, d1, d2, p0
+        np.float64_t v
+
+    with nogil:
+        for n in range(N):
+            for k in range(K):
+                for p in range(P):
+                #p = 0
+                    for shift in range(P):
+                        p0 = permutations_mv[shift, p]
+                        #u = X[n, p0] - means[k, p0]
+                        v = resp[n, k, shift]
+                        tot_resp_mv[k, p] += v
+                        for d1 in range(D):
+                            for d2 in range(D):
+                                covars_mv[k, p, d1, d2] += v * \
+                                    (X_mv[n, p0, d1] - means_mv[k, p, d1]) * \
+                                    (X_mv[n, p0, d2] - means_mv[k, p, d2])
+
+    covars /= tot_resp[..., np.newaxis, np.newaxis]
+    return covars
+
+def calc_new_covar_fullperm(np.ndarray[ndim=3, dtype=np.float64_t] X,
+                            np.ndarray[ndim=3, dtype=np.float64_t] means,
+                            np.ndarray[ndim=3, dtype=np.float64_t] resp,
+                            np.ndarray[ndim=2, dtype=np.int64_t] permutations):
+    cdef:
+        int N = X.shape[0]
+        int D = X.shape[2]
+        int K = means.shape[0]
+        int P = permutations.shape[0]
+
+
+        np.ndarray[ndim=3, dtype=np.float64_t] covars = np.zeros((P, D, D))
+        np.ndarray[ndim=1, dtype=np.float64_t] tot_resp = np.zeros((P))
+
+        np.float64_t[:, :, :] covars_mv = covars
+        np.float64_t[:] tot_resp_mv = tot_resp
+        np.int64_t[:, :] permutations_mv = permutations
+        np.float64_t[:, :, :] means_mv = means
+        np.float64_t[:, :, :] resp_mv = resp
+        np.float64_t[:, :, :] X_mv = X
+
+        int n, k, p, shift, d1, d2, p0
+        np.float64_t v
+
+    with nogil:
+        for n in range(N):
+            for k in range(K):
+                for p in range(P):
+                #p = 0
+                    for shift in range(P):
+                        p0 = permutations_mv[shift, p]
+                        #u = X[n, p0] - means[k, p0]
+                        v = resp[n, k, shift]
+                        tot_resp_mv[p] += v
+                        for d1 in range(D):
+                            for d2 in range(D):
+                                covars_mv[p, d1, d2] += v * \
+                                    (X_mv[n, p0, d1] - means_mv[k, p, d1]) * \
+                                    (X_mv[n, p0, d2] - means_mv[k, p, d2])
+
+    covars /= tot_resp[..., np.newaxis, np.newaxis]
+    return covars
+
+def calc_new_covar_diag(np.ndarray[ndim=3, dtype=np.float64_t] X,
+                            np.ndarray[ndim=3, dtype=np.float64_t] means,
+                            np.ndarray[ndim=3, dtype=np.float64_t] resp,
+                            np.ndarray[ndim=2, dtype=np.int64_t] permutations):
+    cdef:
+        int N = X.shape[0]
+        int D = X.shape[2]
+        int K = means.shape[0]
+        int P = permutations.shape[0]
+
+        np.ndarray[ndim=3, dtype=np.float64_t] covars = np.zeros((K, P, D))
+        np.ndarray[ndim=2, dtype=np.float64_t] tot_resp = np.zeros((K, P))
+
+        np.float64_t[:, :, :] covars_mv = covars
+        np.float64_t[:, :] tot_resp_mv = tot_resp
+        np.int64_t[:, :] permutations_mv = permutations
+        np.float64_t[:, :, :] means_mv = means
+        np.float64_t[:, :, :] resp_mv = resp
+        np.float64_t[:, :, :] X_mv = X
+
+        int n, k, p, shift, d1, d2, p0
+        np.float64_t v
+
+    with nogil:
+        for n in range(N):
+            for k in range(K):
+                for p in range(P):
+                    for shift in range(P):
+                        p0 = permutations_mv[shift, p]
+                        #u = X[n, p0] - means[k, p0]
+                        v = resp[n, k, shift]
+                        tot_resp_mv[k, p] += v
+                        for d in range(D):
+                            covars_mv[k, p, d] += v * \
+                                (X_mv[n, p0, d] - means_mv[k, p, d]) ** 2
+
+    covars /= tot_resp[..., np.newaxis]
+    return covars
+
+def calc_new_covar_diagperm(np.ndarray[ndim=3, dtype=np.float64_t] X,
+                            np.ndarray[ndim=3, dtype=np.float64_t] means,
+                            np.ndarray[ndim=3, dtype=np.float64_t] resp,
+                            np.ndarray[ndim=2, dtype=np.int64_t] permutations):
+    cdef:
+        int N = X.shape[0]
+        int D = X.shape[2]
+        int K = means.shape[0]
+        int P = permutations.shape[0]
+
+        np.ndarray[ndim=2, dtype=np.float64_t] covars = np.zeros((P, D))
+        np.ndarray[ndim=1, dtype=np.float64_t] tot_resp = np.zeros(P)
+
+        np.float64_t[:, :] covars_mv = covars
+        np.float64_t[:] tot_resp_mv = tot_resp
+        np.int64_t[:, :] permutations_mv = permutations
+        np.float64_t[:, :, :] means_mv = means
+        np.float64_t[:, :, :] resp_mv = resp
+        np.float64_t[:, :, :] X_mv = X
+
+        int n, k, p, shift, d1, d2, p0
+        np.float64_t v
+
+    with nogil:
+        for n in range(N):
+            for k in range(K):
+                for p in range(P):
+                    for shift in range(P):
+                        p0 = permutations_mv[shift, p]
+                        #u = X[n, p0] - means[k, p0]
+                        v = resp[n, k, shift]
+                        tot_resp_mv[p] += v
+                        for d in range(D):
+                            covars_mv[p, d] += v * \
+                                (X_mv[n, p0, d] - means_mv[k, p, d]) ** 2
+
+    covars /= tot_resp[..., np.newaxis]
+    return covars
