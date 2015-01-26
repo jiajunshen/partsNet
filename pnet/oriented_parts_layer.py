@@ -10,64 +10,6 @@ import pnet.matrix
 import random
 import sys
 
-def _get_patches(self, X):
-    assert X.ndim == 4
-
-    samples_per_image = self._settings.get('samples_per_image', 20) 
-    fr = self._settings.get('outer_frame', 0)
-    patches = []
-
-    rs = np.random.RandomState(self._settings.get('patch_extraction_seed', 0))
-
-    th = self._settings['threshold']
-    max_th = self._settings.get('max_threshold', np.inf)
-    support_mask = self._settings.get('support_mask')
-
-    consecutive_failures = 0
-
-    for Xi in X:
-
-        # How many patches could we extract?
-        w, h = [Xi.shape[i]-self._part_shape[i]+1 for i in range(2)]
-
-        # TODO: Maybe shuffle an iterator of the indices?
-        indices = list(itr.product(range(w-1), range(h-1)))
-        rs.shuffle(indices)
-        i_iter = itr.cycle(iter(indices))
-
-        for sample in range(samples_per_image):
-            N = 200
-            for tries in range(N):
-                x, y = next(i_iter)
-                selection = [slice(x, x+self._part_shape[0]), slice(y, y+self._part_shape[1])]
-
-                patch = Xi[selection]
-                #edgepatch_nospread = edges_nospread[selection]
-                if support_mask is not None:
-                    tot = patch[support_mask].sum()
-                elif fr == 0:
-                    tot = patch.sum()
-                else:
-                    tot = patch[fr:-fr,fr:-fr].sum()
-
-                if th <= tot <= max_th: 
-                    patches.append(patch)
-                    if len(patches) >= self._settings.get('max_samples', np.inf):
-                        return np.asarray(patches)
-                    consecutive_failures = 0
-                    break
-
-                if tries == N-1:
-                    ag.info('WARNING: {} tries'.format(N))
-                    ag.info('cons', consecutive_failures)
-                    consecutive_failures += 1
-
-                if consecutive_failures >= 10:
-                    # Just give up.
-                    raise ValueError("FATAL ERROR: Threshold is probably too high.")
-
-    return np.asarray(patches)
-
 
 # TODO: Use later
 def _threshold_in_counts(settings, num_edges, contrast_insensitive, part_shape):
@@ -87,6 +29,9 @@ def _extract_many_edges(bedges_settings, settings, images, must_preserve_size=Fa
     edge_type = settings.get('edge_type', 'yali')
     if edge_type == 'yali':
         X = ag.features.bedges(images, **sett)
+        return X
+    elif edge_type == 'colorYali':
+        X = ag.features.bcolorEdges(images, **sett)
         return X
     else:
         raise RuntimeError("No such edge type")
@@ -173,6 +118,7 @@ class OrientedPartsLayer(Layer):
             args = ((im_b,) + sett for im_b in im_batches)
 
             feat = np.concatenate([batch for batch in pnet.parallel.starmap_unordered(_extract_batch, args)])
+        print(feat.shape)
 
         return (feat, self._num_parts, self._num_orientations)
 
@@ -330,7 +276,6 @@ class OrientedPartsLayer(Layer):
         the_patches = []
         the_originals = []
         ag.info("Extracting patches from")
-        #edges, img = ag.features.bedges_from_image(f, k=5, radius=1, minimum_contrast=0.05, contrast_insensitive=False, return_original=True, lastaxis=True)
         setts = self._settings['bedges'].copy()
         radius = setts['radius']
         setts2 = setts.copy()
@@ -351,7 +296,10 @@ class OrientedPartsLayer(Layer):
             size = img.shape[:2]
             # Make it square, to accommodate all types of rotations
             new_size = int(np.max(size) * np.sqrt(2))
-            img_padded = ag.util.pad_to_size(img, (new_size, new_size))
+            if img.ndim == 2:
+                img_padded = ag.util.pad_to_size(img, (new_size, new_size))
+            elif img.ndim == 3:
+                img_padded = ag.util.pad_to_size(img, (new_size, new_size, 3))
             pad = [(new_size-size[i])//2 for i in range(2)]
 
             angles = np.arange(0, 360, 360/ORI)
@@ -442,7 +390,11 @@ class OrientedPartsLayer(Layer):
                         # Now, let's explore all orientations
 
                         patch = np.zeros((ORI * POL,) + ps + (E,))
-                        vispatch = np.zeros((ORI * POL,) + ps)
+                        if img.ndim == 2:
+                            vispatch = np.zeros((ORI * POL,) + ps)
+                        else:
+                            vispatch = np.zeros((ORI * POL,) + ps + (3,))
+
 
                         for ori in range(ORI * POL):
                             p = matrices[ori] * XY

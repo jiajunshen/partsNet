@@ -13,7 +13,8 @@ class ColorEdgeLayer(Layer):
         assert X.ndim == 4
         channels = X.shape[-1]
         edges = ag.features.bedges(np.mean(X,axis = -1), **self._edge_settings)
-        colorFeature = ag.features.colorEdges(X) 
+        #colorFeature = ag.features.colorEdges(X) 
+        colorFeature = ag.features.colorEdges_hsl(X)
         result = np.concatenate((edges,colorFeature), axis = -1)
         return result
 
