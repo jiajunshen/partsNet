@@ -26,7 +26,10 @@ class ExtensionPartsLayer(Layer):
     
     def extract(self,X):
         assert self._classificationLayers is not None, "Must be trained before calling extract"
-        X, num_parts = X
+        if(len(X) == 2):
+            X, num_parts = X
+        else:
+            X, num_parts, orientation = X
         assert X.ndim == 4, "Input X dimension is not correct"
         assert num_parts == self._num_lower_parts
 
@@ -71,9 +74,12 @@ class ExtensionPartsLayer(Layer):
         return self._classificationLayers is not None 
 
     def train(self, X, Y=None, OriginalX = None):
-        
-        X_data, num_lower_parts = X
-        
+        if (len(X) == 2): 
+            X_data, num_lower_parts = X
+        else:
+            X_data, num_real_part, orientation = X
+        num_lower_parts = num_real_part
+        print(num_lower_parts) 
 
         assert Y is None
         
