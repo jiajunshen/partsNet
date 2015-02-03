@@ -30,6 +30,7 @@ class ExtensionPartsLayer(Layer):
             X, num_parts = X
         else:
             X, num_parts, orientation = X
+        
         assert X.ndim == 4, "Input X dimension is not correct"
         assert num_parts == self._num_lower_parts
 
@@ -78,13 +79,11 @@ class ExtensionPartsLayer(Layer):
             X_data, num_lower_parts = X
         else:
             X_data, num_real_part, orientation = X
-        num_lower_parts = num_real_part
-        print(num_lower_parts) 
+            num_lower_parts = num_real_part
 
         assert Y is None
         
         assert X_data.ndim == 4
-
         assert num_lower_parts == self._num_lower_parts
         
         X_data = X_data.reshape((X_data.shape[0],X_data.shape[1],X_data.shape[2]))

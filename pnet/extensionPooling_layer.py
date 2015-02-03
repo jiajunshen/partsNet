@@ -2,7 +2,21 @@ from __future__ import division, print_function, absolute_import
 from pnet.bernoullimm import BernoulliMM
 from pnet.layer import Layer
 import numpy as np
+import numpy
 import matplotlib.pyplot as plt
+import theano
+import cPickle
+import gzip
+import time
+import PIL.Image
+from pnet.rbm import RBM
+import numpy
+
+import theano
+import theano.tensor as T
+import os
+
+from theano.tensor.shared_randomstreams import RandomStreams
 @Layer.register('extension-parts-grouping-layer')
 class ExtensionPoolingLayer(Layer):
     def __init__(self, n_parts, grouping_type = 'rbm', pooling_type = 'distance', pooling_distance = 5, weights_file = None, save_weights_file = None, settings = {}):
@@ -137,8 +151,8 @@ class ExtensionPoolingLayer(Layer):
                     poolMatrix[i,j,p] = np.argsort(distanceMatrix[i,j,p,:])
                     for index in range(self._n_parts):
                         poolToPart = int(poolMatrix[i,j,p,index])
-                        print("poolMatrix Num Investigation")
-                        print(index, poolToPart,partsCodedNum[i,j,poolToPart])
+                        #print("poolMatrix Num Investigation")
+                        #print(index, poolToPart,partsCodedNum[i,j,poolToPart])
                         if(partsCodedNum[i,j,poolToPart]<1):
                             poolMatrix[i,j,p,index] = p #Actually it makes more sense if we set it equal to -1. But in order to make [Reference: 01] easier, we set it equals to p here.    Reference Number : 02
 
@@ -226,7 +240,7 @@ def load_data(allDataX):
 
 
 
-def test_rbm(datasets, learning_rate=0.1, training_epochs=30,
+def testRBM(datasets, learning_rate=0.1, training_epochs=30,
               batch_size=20,
              n_chains=20, n_samples=10, output_folder='rbm_plots',
              n_hidden=200):
@@ -248,10 +262,9 @@ def test_rbm(datasets, learning_rate=0.1, training_epochs=30,
     :param n_samples: number of samples to plot for each chain
 
     """
-    datasets = load_data(shuffledExtract,shuffledLabel)
-
+    numVisible = datasets.shape[1]
+    datasets = load_data(datasets)
     train_set_x = datasets[0]
-    numVisible = shuffledExtract.shape[1]
     # compute number of minibatches for training, validation and testing
     n_train_batches = train_set_x.get_value(borrow=True).shape[0] // batch_size
 
