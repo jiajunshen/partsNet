@@ -226,7 +226,7 @@ def load_data(allDataX):
 
 
 
-def test_rbm(datasets, learning_rate=0.1, training_epochs=30,
+def test_rbm(datasets, learning_rate=0.1, training_epochs=100,
               batch_size=20,
              n_chains=20, n_samples=10, output_folder='rbm_plots',
              n_hidden=200):
