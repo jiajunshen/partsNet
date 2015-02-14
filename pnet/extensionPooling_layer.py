@@ -44,6 +44,7 @@ class ExtensionPoolingLayer(Layer):
             weights = np.load(self._weights_file)
             self._getPoolMatrix(weights,X.shape[1:], X)
         elif self._grouping_type == 'rbm':
+            print("running RBM")
             rbmModel = testRBM(X.reshape(X.shape[0],-1))
             weights = rbmModel.W.get_value(borrow=True)
             if self._save_weights_file is not None:
@@ -240,7 +241,7 @@ def load_data(allDataX):
 
 
 
-def testRBM(datasets, learning_rate=0.1, training_epochs=30,
+def testRBM(datasets, learning_rate=0.1, training_epochs=100,
               batch_size=20,
              n_chains=20, n_samples=10, output_folder='rbm_plots',
              n_hidden=200):
@@ -303,7 +304,7 @@ def testRBM(datasets, learning_rate=0.1, training_epochs=30,
 
     plotting_time = 0.
     start_time = time.clock()
-
+    print("training")
     # go through training epochs
     for epoch in xrange(training_epochs):
 
