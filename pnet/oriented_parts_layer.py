@@ -508,3 +508,4 @@ class OrientedPartsLayer(Layer):
                     num_parts=self._num_parts,
                     part_shape=self._part_shape,
                     settings=self._settings)
+
