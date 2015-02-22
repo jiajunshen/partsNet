@@ -45,7 +45,13 @@ class ExtensionPoolingLayer(Layer):
             self._getPoolMatrix(weights,X.shape[1:], X)
         elif self._grouping_type == 'rbm':
             print("running RBM")
-            rbmModel = testRBM(X.reshape(X.shape[0],-1))
+            
+            n_hidden = self._settings.get('n_hidden', 200)
+            training_epochs = self._settings.get('epochs', 50)
+            learning_rate = self._settings.get('rate', 0.1)
+            seed = self._settings.get('rbm_seed',123)
+            rbmModel = testRBM(X.reshape(X.shape[0],-1), learning_rate = learning_rate, training_epochs = training_epochs, n_hidden = n_hidden, randomSeed = seed)
+
             weights = rbmModel.W.get_value(borrow=True)
             if self._save_weights_file is not None:
                 np.save(self._save_weights_file,weights)
@@ -209,6 +215,8 @@ class ExtensionPoolingLayer(Layer):
 
 
 
+
+
 def load_data(allDataX):
     import urllib
 
@@ -238,13 +246,10 @@ def load_data(allDataX):
     return rval
 
 
-
-
-
-def testRBM(datasets, learning_rate=0.1, training_epochs=100,
+def testRBM(datasets, learning_rate=0.1, training_epochs=50,
               batch_size=20,
              n_chains=20, n_samples=10, output_folder='rbm_plots',
-             n_hidden=200):
+             n_hidden=200, randomSeed=123):
     """
     Demonstrate how to train and afterwards sample from it using Theano.
 
@@ -273,7 +278,7 @@ def testRBM(datasets, learning_rate=0.1, training_epochs=100,
     index = T.lscalar()    # index to a [mini]batch
     x = T.matrix('x')  # the data is presented as rasterized images
 
-    rng = numpy.random.RandomState(123)
+    rng = numpy.random.RandomState(randomSeed)
     theano_rng = RandomStreams(rng.randint(2 ** 30))
 
     # initialize storage for the persistent chain (state = hidden
@@ -326,6 +331,7 @@ def testRBM(datasets, learning_rate=0.1, training_epochs=100,
 
     print ('Training took %f minutes' % (pretraining_time / 60.))
     return rbm
+
 
 def KLDistance(p,q):
     p = np.ravel(p)
