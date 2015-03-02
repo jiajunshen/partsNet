@@ -56,6 +56,9 @@ class ExtensionPoolingLayer(Layer):
             if self._save_weights_file is not None:
                 np.save(self._save_weights_file,weights)
             self._getPoolMatrix(weights,X.shape[1:], X)
+        elif self._grouping_type == 'logReg':
+            print("running Logistic Regression")
+            
         elif self._grouping_type == 'mixture_model':
             #pass
             mixtureModel = BernoulliMM(n_components = 1000, n_iter = 100, n_init = 2, random_state = self._settings.get('em_seed', 0), min_prob = 0.005, joint=False,blocksize = 100)

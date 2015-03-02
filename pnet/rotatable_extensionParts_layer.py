@@ -8,77 +8,156 @@ import numpy as np
 import itertools as itr
 import amitgroup as ag
 from pnet.layer import Layer
+from pnet.cyfuncs import index_map_pooling
 import pnet
 
 @Layer.register('rotatable_extensionParts_layer')
 class RotExtensionPartsLayer(Layer):
-    def __init__(self, num_parts, num_components, part_shape, rotation = None, shifting = None, settings={}):
+    def __init__(self, num_parts, num_components, part_shape, rotation = None, lowerLayerShape= None, shifting = None, settings={}):
         self._rotation = rotation
         self._shifting = shifting
-        self._num_parts = num_parts * num_components
-        self._num_lower_parts = num_parts
+        self._num_parts = num_parts  * self._rotation * num_components
+        self._num_lower_parts = num_parts * self._rotation
+        self._num_true_parts = self._num_parts // num_components
         self._num_components = num_components
         self._part_shape = part_shape
+        self._lowerLayerShape = lowerLayerShape
         self._settings = settings
-
+        self._classificationLayers = None
         self._train_info = {}
-        self._parts = None
-        self._weights = None
+        self._partsDistance = None
 
     def extract(self,X):
-        assert self._parts is not None, "Must be trained before calling extract"
-        th = self._settings['threshold']
-        part_logits = np.rollaxis(logit(self._parts).astype(np.float64),0,4)
-        constant_terms = np.apply_over_axes(np.sum, np.log(1-self._parts).astype(np.float64), [1, 2, 3]).ravel()
+        assert self._classificationLayers is not None, "Must be trained before calling extract"
+        if(len(X) == 2):
+            X, num_parts = X
+        else:
+            X, num_parts, orientation = X
+        
+        assert X.ndim == 4, "Input X dimension is not correct"
+        assert num_parts == self._num_lower_parts
 
-        from pnet.cyfuncs import code_index_map_multi
+        X = X.reshape((X.shape[0], X.shape[1], X.shape[2]))
 
-        feature_map = code_index_map_multi(X, part_logits, constant_terms, th,
-                                           outer_frame=self._settings['outer_frame'], 
-                                           min_llh=self._settings.get('min_llh', -np.inf),
-                                           n_coded=self._settings.get('n_coded', 1))
+        secondLevelCurx = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1],1,1,self._num_lower_parts))
+        secondLevelCurxCenter = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
 
 
-        return (feature_map, self._num_parts)
+        extractedFeature = np.empty((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
+        totalRange = X.shape[1]
+        frame = (self._part_shape[0] - self._lowerLayerShape[0]) / 2
+        frame = int(frame)
+
+        for m in range(totalRange)[frame:totalRange-frame]:
+            for n in range(totalRange)[frame:totalRange-frame]:
+                secondLevelCurx[:,m-frame,n-frame] = index_map_pooling(X[:,m-frame:m+frame+1,n-frame:n+frame+1],self._num_lower_parts, (2 * frame + 1, 2 * frame + 1), (2 * frame + 1, 2 * frame + 1))
+                secondLevelCurxCenter[:,m-frame,n-frame] = X[:,m,n]
+                for i in range(X.shape[0]):
+                    secondLevelCurx[i,m-frame,n-frame] = self._process_testing_patches(secondLevelCurx[i,m-frame,n-frame],secondLevelCurxCenter[i,m-frame,n-frame])
+
+        for i in range(X.shape[0]):
+            patch = X[i]
+            for m in range(patch.shape[0] + self._lowerLayerShape[0]- self._part_shape[0]):
+                for n in range(patch.shape[1] + self._lowerLayerShape[1] - self._part_shape[1]):
+                    if(secondLevelCurxCenter[i,m,n]!=-1):
+                        firstLevelPartIndex = secondLevelCurxCenter[i,m,n]
+                        firstLevelPartIndex = int(firstLevelPartIndex)
+                        firstLevelRotation = firstLevelPartIndex % self._rotation
+                        extractedFeaturePart = self.codeParts(np.array(secondLevelCurx[i,m,n][np.newaxis,:], dtype = np.uint8), self._classificationLayers[(firstLevelPartIndex - firstLevelRotation) // self._rotation])[0]
+                        extractedFeature[i,m,n] = int((firstLevelPartIndex - firstLevelRotation) // self._rotation * self._num_components * self._rotation + extractedFeaturePart * self._rotation + firstLevelRotation)
+                        #extractedFeature[i,m,n] = int(self._num_components * firstLevelPartIndex + extractedFeaturePart)
+                    else:
+                        extractedFeature[i,m,n] = -1
+        extractedFeature = np.array(extractedFeature[:,:,:,np.newaxis],dtype = np.int64)
+        return (extractedFeature,self._num_parts, self._rotation)
+        
+    def codeParts(self,ims, allLayers):
+        curX = ims
+        for layer in allLayers:
+            curX = layer.extract(curX)
+        return curX
+
     @property
     def trained(self):
-        return self._parts is not None 
+        return self._classificationLayers is not None 
 
-    def train(self, X, Y=None, OriginalX = None):
+    def train(self, X_n, Y=None, OriginalX = None):
         assert Y is None
+        X = X_n[0]
+        num_parts = X_n[1]
+        num_orientations = X_n[2]
+        num_true_parts = num_parts // num_orientations
+        print(num_parts,num_orientations,num_true_parts, self._num_parts)
+        assert num_parts  * self. _num_components == self._num_parts
+        assert num_orientations == self._rotation
+        
+        assert X.ndim == 4
+        X = X.reshape((X.shape[0],X.shape[1],X.shape[2]))
+
         ag.info('Extracting patches')
-        patches, patches_original = self._get_patches(X,OriginalX)
-        processPatches = self._process_patches(patches)
+
+
+        partsRegion = self._extract_patches(X)
+        patches = self._process_patches(partsRegion)
         ag.info('Done extracting patches')
-        ag.info('Training patches', patches.shape)
-        return self.sequential_train_from_samples(patches)
+        #ag.info('Training patches', patches.shape)
+        return self._train_patches(patches)
 
+    def partsPool(self,originalPartsRegion, numParts):
+        partsGrid = np.zeros((1,1,numParts))
+        for i in range(originalPartsRegion.shape[0]):
+            for j in range(originalPartsRegion.shape[1]):
+                if(originalPartsRegion[i,j]!=-1):
+                    partsGrid[0,0,originalPartsRegion[i,j]] = 1
+        return partsGrid
+    
+    def _extract_patches(self,X):
+        
+        ag.info('Extract Patches: Seperate coded regions into groups')
+        trainingDataNum = X.shape[0]
+        totalRange = X.shape[1]
+        frame = (self._part_shape[0] - self._lowerLayerShape[0]) / 2
+        frame = int(frame)
+        partsRegion = [[] for x in range(self._num_lower_parts)]
 
-    def _process_patches(self,patches):
-        if(self._shifting!=None && self._rotation!=None):
-            permutation = np.empty((self._rotation, self._rotation * self._part_shape[0] * self._part_shape[1]), np.int_)
-            for a in range(self._rotation):
-                if a == 0:
-                    permutation[a] = np.arange(self._rotation * self._part_shape[0] * self._part_shape[1])
-                else:
-                    permutation[a] = np.roll(permutation[a-1], self._part_shape[0] * self._part_shape[1])
+        
+        for i in range(trainingDataNum):
+            for m in range(totalRange)[frame:totalRange - frame]:
+                for n in range(totalRange)[frame:totalRange - frame]:
+                    if(X[i,m,n]!=-1):
+                        partsGrid = self.partsPool(X[i,m-frame:m+frame+1,n-frame:n+frame+1], self._num_lower_parts)
+                        partsRegion[X[i,m,n]].append(partsGrid)
+        return partsRegion
 
-                     
+    def _process_patches(self, partsRegion):
+        ## This is to rotate the image patches back
+        processedPartsRegion = [[] for x in range(self._num_lower_parts // self._rotation)]
+        assert len(partsRegion) == self._num_lower_parts
+        for i in range(self._num_lower_parts):
+            if i % self._rotation == 0:
+                processedPartsRegion[i//self._rotation] = partsRegion[i]
+            else:
+                rotation = i % self._rotation
+                for partsGrid in partsRegion[i]:
+                    newPartsGrid = np.zeros(partsGrid.shape)
+                    for codeIndex in range(self._num_lower_parts):
+                        if partsGrid[0, 0,codeIndex] == 1:
+                            startIndex = codeIndex - codeIndex % self._rotation
+                            lowerPartsRotation = codeIndex % self._rotation
+                            newPartsGrid[0, 0, int(startIndex + (lowerPartsRotation + rotation) % self._rotation)] = 1
+                    processedPartsRegion[(i - rotation)//self._rotation].append(partsGrid)
+        return processedPartsRegion
 
-    def sequential_train_from_samples(self,patches):
-        allParts = np.ones((self._num_parts,)+patches.shape[1:])
-        currentPatches = patches
-        print(patches.shape)
-        for i in range(self._num_parts):
-            numParts = self._num_parts - i
-            currentParts = self.train_from_samples(currentPatches,numParts)
-            allParts[i] = currentParts[0]
-            codeIndex = self.codePatches(currentPatches,currentParts)
-            currentPatches = currentPatches[codeIndex!=0]
-            print(currentPatches.shape)
-            if(currentPatches.shape[0] <= 0):
-                break;
-        self._parts = allParts
+    def _process_testing_patches(self, partsGrid, rotation):
+        if rotation % self._rotation == 0:
+            return partsGrid
+        newPartsGrid = np.zeros(partsGrid.shape)
+        for codeIndex in range(self._num_lower_parts):
+            if partsGrid[0,0,codeIndex] == 1:
+                startIndex = codeIndex - codeIndex % self._rotation
+                lowerPartsRotation = codeIndex % self._rotation
+                newPartsGrid[0,0,int(startIndex + (lowerPartsRotation + rotation) % self._rotation)] = 1
+        return newPartsGrid
 
 
     def codePatches(self,patches,currentParts):
@@ -95,90 +174,24 @@ class RotExtensionPartsLayer(Layer):
         return np.argmax(codeParts, axis = 1)
         
 
-    def train_from_samples(self, patches,num_parts):
-        #from pnet.latent_bernoulli_mm import LatentBernoulliMM
-        from pnet.bernoullimm import BernoulliMM
-        min_prob = self._settings.get('min_prob', 0.01)
-        flatpatches = patches.reshape((patches.shape[0], -1))
-        parts = np.ones((num_parts,) + patches.shape[1:])
-        if 0:
-            mm = BernoulliMM(n_components=num_parts, n_iter=20, tol=1e-15,n_init=2, random_state=0, min_prob=min_prob, verbose=False)
-            print(mm.fit(flatpatches))
-            print('AIC', mm.aic(flatpatches))
-            print('BIC', mm.bic(flatpatches))
-            #import pdb; pdb.set_trace()
-            parts = mm.means_.reshape((num_parts,)+patches.shape[1:])
-            #self._weights = mm.weights_
-        else:
-            
-            from pnet.bernoulli import em
-            ret = em(flatpatches, num_parts,20,numpy_rng=self._settings.get('em_seed',0),verbose=True)
-            parts = ret[1].reshape((num_parts,) + patches.shape[1:])
-            self._weights = np.arange(self._num_parts)
+    def _train_patches(self,partsRegion):
+        allPartsLayer = [[pnet.PartsLayer(self._num_components,(1,1),
+                    settings=dict(outer_frame = 0,
+                    em_seed = self._settings.get('em_seed',0),
+                    threshold = 5,
+                    sample_per_image = 1,
+                    max_samples=10000,
+                    min_prob = 0.005,
+                    #min_llh = -40
+                    ))]
+                    for i in range(self._num_lower_parts//self._rotation)]
+        for i in range(self._num_lower_parts//self._rotation):
+            if(not partsRegion[i]):
+                continue
+            allPartsLayer[i][0].train_from_samples(np.array(partsRegion[i]),None)
+        self._classificationLayers = allPartsLayer
 
-            #self._weights = mm.weights
-            
-        # Calculate entropy of parts
-        Hall = (parts * np.log(parts) + (1 - parts) * np.log(1 - parts))
-        H = -np.apply_over_axes(np.mean, Hall, [1, 2, 3])[:,0,0,0]
 
-        # Sort by entropy
-        II = np.argsort(H)
-
-        parts[:] = parts[II]
-        #self._train_info['entropy'] = H[II]
-        return parts
-
-    def _get_patches(self, X, OriginalX):
-        assert X.ndim == 4
-        assert OriginalX.ndim == 3
-        samples_per_image = self._settings.get('samples_per_image', 20) 
-        fr = self._settings['outer_frame']
-        patches = []
-        patches_original = []
-        rs = np.random.RandomState(self._settings.get('patch_extraction_seed', 0))
-
-        th = self._settings['threshold']
-
-        for i in range(X.shape[0]):
-            Xi = X[i]
-            OriginalXi = OriginalX[i]
-            # How many patches could we extract?
-            w, h = [Xi.shape[i]-self._part_shape[i]+1 for i in range(2)]
-
-            # TODO: Maybe shuffle an iterator of the indices?
-            indices = list(itr.product(range(w-1), range(h-1)))
-            rs.shuffle(indices)
-            i_iter = itr.cycle(iter(indices))
-
-            for sample in range(samples_per_image):
-                N = 200
-                for tries in range(N):
-                    x, y = next(i_iter)
-                    selection = [slice(x, x+self._part_shape[0]), slice(y, y+self._part_shape[1])]
-
-                    patch = Xi[selection]
-                    #edgepatch_nospread = edges_nospread[selection]
-                    if fr == 0:
-                        tot = patch.sum()
-                    else:
-                        tot = patch[fr:-fr,fr:-fr].sum()
-
-                    if th <= tot: 
-                        patches.append(patch)
-                        vispatch = OriginalXi[selection]
-                        span = vispatch.min(),vispatch.max()
-                        if span[1]-span[0] > 0:
-                            vispatch = (vispatch - span[0])/(span[1] - span[0])
-                        patches_original.append(vispatch)
-                        if len(patches) >= self._settings.get('max_samples', np.inf):
-                            return np.asarray(patches),np.asarray(patches_original)
-                        break
-
-                    if tries == N-1:
-                        ag.info('WARNING: {} tries'.format(N))
-
-        return np.asarray(patches),np.asarray(patches_original)
 
     def infoplot(self, vz):
         from pylab import cm
@@ -231,15 +244,23 @@ class RotExtensionPartsLayer(Layer):
     def save_to_dict(self):
         d = {}
         d['num_parts'] = self._num_parts
+        d['rotation'] = self._rotation
+        d['shifting'] = self._shifting
+        d['num_lower_parts'] = self._num_lower_parts
+        d['num_components'] = self._num_components
         d['part_shape'] = self._part_shape
+        d['lowerLayerShape'] = self._lowerLayerShape
         d['settings'] = self._settings
-        d['parts'] = self._parts
-        d['weights'] = self._weights
+        d['classificationLayers'] = self._classificationLayers
+        d['train_info'] = self._train_info
+        d['partsDistance'] = self._partsDistance
         return d
 
     @classmethod
     def load_from_dict(cls, d):
-        obj = cls(d['num_parts'], d['part_shape'], settings=d['settings'])
-        obj._parts = d['parts']
-        obj._weights = d['weights']
+        numParts = d['num_lower_parts'] // d['rotation']
+        obj = cls(numParts, d['num_components'],d['part_shape'], d['rotation'],d['lowerLayerShape'], settings=d['settings'])
+        obj._classificationLayers = d['classificationLayers']
+        obj._train_info = d['train_info']
+        obj._partsDistance = d['partsDistance']
         return obj
