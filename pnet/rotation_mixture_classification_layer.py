@@ -35,14 +35,19 @@ class RotationMixtureClassificationLayer(SupervisedLayer):
         from pnet.cyfuncs import index_map_pooling_multi as poolf
         X = poolf(Z, F, self._pooling_settings['shape'], self._pooling_settings['strides']) 
 
-        XX =  X[:,np.newaxis,np.newaxis]
         theta = self._models[np.newaxis]
+        Yhat = np.zeros(X.shape[0])
         #print('Z', Z.shape)
         #print('mm', mm.shape)
-
-        llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
-        bb = np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0]
-        Yhat = np.argmax(bb.max(-1), axis=1)
+        if 1:
+            blockSize = 1000
+            for i in range(0, X.shape[0],blockSize):
+                blockend = min(X.shape[0], i + blockSize)
+                X_part = X[i:blockend]
+                XX =  X_part[:,np.newaxis,np.newaxis]
+                llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
+                bb = np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0]
+                Yhat[i:blockend] = np.argmax(bb.max(-1), axis=1)
         return Yhat 
     
     def train(self, X_n, Y, OriginalX = None):

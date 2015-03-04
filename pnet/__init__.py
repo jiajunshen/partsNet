@@ -19,7 +19,7 @@ from .mixture_classification_layer import MixtureClassificationLayer
 from .svm_classification_layer import SVMClassificationLayer
 from .extensionParts_layer import ExtensionPartsLayer
 from .extensionPooling_layer import ExtensionPoolingLayer
-
+from .logisticRegression import LogisticRegression
 from .rotatable_extensionParts_layer import RotExtensionPartsLayer
 from .rotation_mixture_classification_layer import RotationMixtureClassificationLayer
 

@@ -105,6 +105,7 @@ def em(data, num_mixture_component, max_num_iteration=25,
         
     n, d = data.shape
     m1 = num_mixture_component
+    print(n,d,m1)
     # Truncate with epsilon or beta prior?
     if isinstance(mu_truncation, float):
         use_epsilon = True

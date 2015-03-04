@@ -11,7 +11,7 @@ import time
 import PIL.Image
 from pnet.rbm import RBM
 import numpy
-
+from pnet.logisticRegression import LogisticRegression
 import theano
 import theano.tensor as T
 import os
@@ -428,8 +428,8 @@ def load_log_data(training_set, training_label, validation_set, validation_label
     return rval
 
 
-def sgd_optimization_mnist(dataSize, trainingData, trainingDataLabel, validationData, validationDataLabel, learning_rate=0.13, n_epochs=1000,
-                           batch_size=200):
+def sgd_optimization_mnist(dataSize, trainingData, trainingDataLabel, validationData, validationDataLabel, learning_rate=0.05, n_epochs=2000,
+                           batch_size=50):
     """
     Demonstrate stochastic gradient descent optimization of a log-linear
     model
