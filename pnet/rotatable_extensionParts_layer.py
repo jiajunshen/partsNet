@@ -121,7 +121,7 @@ class RotExtensionPartsLayer(Layer):
         finalResultRegion = []
         for i in range(self._num_lower_parts//self._rotation):
             blocks = []
-            for ori in range(self._n_orientations):
+            for ori in range(self._rotation):
                 angle = ori / self._rotation * 360
                 from pnet.cyfuncs import rotate_index_map_pooling
                 yy1 = rotate_index_map_pooling(np.asarray(partsRegion[i])[...,0],angle, self._rotation, self._num_lower_parts, (self._part_shape - self._lowerLayerShape + 1,self._part_shape - self._lowerLayerShape + 1))
@@ -148,7 +148,7 @@ class RotExtensionPartsLayer(Layer):
         PP = np.arange(POL)
         II = [list(itr.product(PPi, RRi)) for PPi in cycles(PP) for RRi in cycles(RR)]
         lookup = dict(zip(itr.product(PP,RR),itr.count()))
-        num_angle = self._n_orientations
+        num_angle = self._rotation
         d = np.prod(shape)
         permutation = np.empty((num_angle, num_angle * d), dtype = np.int_)
         for a in range(num_angle):
