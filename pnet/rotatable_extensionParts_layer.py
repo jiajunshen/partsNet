@@ -61,7 +61,7 @@ class RotExtensionPartsLayer(Layer):
                         firstLevelPartIndex = int(firstLevelPartIndex)
                         firstLevelPartIndex = (firstLevelPartIndex - firstLevelPartIndex % self._rotation)//self._rotation
                         theta = self._models[firstLevelPartIndex]
-                        XX = secondLevelCurx[:, np.newaxis]
+                        XX = secondLevelCurx[i, m, n][np.newaxis]
                         print(XX.shape, theta.shape)
                         llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
                         bb = np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0]
@@ -98,7 +98,7 @@ class RotExtensionPartsLayer(Layer):
 
         partsRegion, shape = self._extract_patches(X)
         ag.info('Done extracting patches')
-        return self._train_patches(patches,shape)
+        return self._train_patches(partsRegion,shape)
 
     def _extract_patches(self,X):
         
@@ -121,10 +121,11 @@ class RotExtensionPartsLayer(Layer):
         finalResultRegion = []
         for i in range(self._num_lower_parts//self._rotation):
             blocks = []
+            print(np.asarray(partsRegion[i]).shape)
             for ori in range(self._rotation):
                 angle = ori / self._rotation * 360
                 from pnet.cyfuncs import rotate_index_map_pooling
-                yy1 = rotate_index_map_pooling(np.asarray(partsRegion[i])[...,0],angle, 0, self._rotation, self._num_lower_parts, (self._part_shape[0] - self._lowerLayerShape[0] + 1,self._part_shape[1] - self._lowerLayerShape[1] + 1))
+                yy1 = rotate_index_map_pooling(np.asarray(partsRegion[i]),angle, 0, self._rotation, self._num_lower_parts, (self._part_shape[0] - self._lowerLayerShape[0] + 1,self._part_shape[1] - self._lowerLayerShape[1] + 1))
                 #yy.shape = (numOfPatches, 1, 1, rotation, trueParts)
                 yy = yy1.reshape(yy1.shape[:3] + (self._rotation, self._num_lower_parts // self._rotation))
                 blocks.append(yy)
@@ -132,7 +133,7 @@ class RotExtensionPartsLayer(Layer):
             blocks = np.asarray(blocks).transpose((1,0,2,3,4,5))
             shape = blocks.shape[2:4] + (np.prod(blocks.shape[4:]),)
             ## Flatten
-            blocks = blocks.reshape(blocks.shape[:2] + (-1))
+            blocks = blocks.reshape(blocks.shape[:2] + (-1,))
             finalResultRegion.append(blocks)
         return (finalResultRegion, shape)
 
@@ -160,7 +161,7 @@ class RotExtensionPartsLayer(Layer):
         mm_models = []
         for i in range(self._num_lower_parts//self._rotation):
             block = partsRegion[i]
-            ret = em(block.reshape((block.shape[0],-1)),self._num_components, n_iter = 10, n_init = 1,  permutation = permutation, numpy_rng = 0, verbose = True)
+            ret = em(block.reshape((block.shape[0],-1)),self._num_components, 10, permutation = permutation, numpy_rng = 0, verbose = True)
             mu = ret[1].reshape((self._num_components * self._rotation, ) + shape)
             mm_models.append(mu)
         self._models = np.asarray(mm_models)
