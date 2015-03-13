@@ -42,7 +42,7 @@ class RotExtensionPartsLayer(Layer):
         secondLevelCurx = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1],1,1,self._num_lower_parts))
         secondLevelCurxCenter = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
 
-        extractedFeature = np.empty((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
+        #extractedFeature = np.empty((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
         totalRange = X.shape[1]
         frame = (self._part_shape[0] - self._lowerLayerShape[0]) / 2
         frame = int(frame)
@@ -51,7 +51,34 @@ class RotExtensionPartsLayer(Layer):
             for n in range(totalRange)[frame:totalRange-frame]:
                 secondLevelCurx[:,m-frame,n-frame] = index_map_pooling(X[:,m-frame:m+frame+1,n-frame:n+frame+1],self._num_lower_parts, (2 * frame + 1, 2 * frame + 1), (2 * frame + 1, 2 * frame + 1))
                 secondLevelCurxCenter[:,m-frame,n-frame] = X[:,m,n]
+        print(secondLevelCurxCenter.shape)
+        print(secondLevelCurxCenter[1])
+        newSecondLevelCurxCenter = secondLevelCurxCenter.flatten()
+        secondCenterShape = newSecondLevelCurxCenter.shape
+        secondCurxShape = secondLevelCurx.shape
+        newSecondLevelCurx = secondLevelCurx.reshape((secondCurxShape[0] * secondCurxShape[1] * secondCurxShape[2], secondCurxShape[3], secondCurxShape[4], secondCurxShape[5]))
 
+        extractedFeature = np.empty(secondCenterShape)
+        for j in range(self._num_lower_parts // self._rotation):
+            for k in range(self._rotation):
+                index = np.where(newSecondLevelCurxCenter == j * self._rotation + k)
+                XX = newSecondLevelCurx[index][:,np.newaxis]
+                theta = self._models[j][np.newaxis]
+
+                #print(XX.shape, theta.shape)
+                llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
+                bb = np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0]
+                #print(bb.shape)
+                maxIndex = np.argmax(bb,axis = -1)
+                extensionPart = maxIndex // self._rotation
+                rotatedAngle = maxIndex % self._rotation
+                detectedPart = j * self._num_components * self._rotation + extensionPart * self._rotation + rotatedAngle
+                extractedFeature[index] = np.asarray(detectedPart, dtype = np.int)
+        extractedFeature = extractedFeature.reshape((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
+        extractedFeature = np.array(extractedFeature[:,:,:,np.newaxis],dtype = np.int64)
+
+        return (extractedFeature,self._num_parts, self._rotation)
+        '''
         for i in range(X.shape[0]):
             patch = X[i]
             for m in range(patch.shape[0] + self._lowerLayerShape[0]- self._part_shape[0]):
@@ -73,7 +100,8 @@ class RotExtensionPartsLayer(Layer):
                     else:
                         extractedFeature[i,m,n] = -1
         extractedFeature = np.array(extractedFeature[:,:,:,np.newaxis],dtype = np.int64)
-        return (extractedFeature,self._num_parts, self._rotation)
+
+        '''
         
 
     @property
