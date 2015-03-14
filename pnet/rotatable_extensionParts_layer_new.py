@@ -42,7 +42,7 @@ class RotExtensionPartsLayer(Layer):
         secondLevelCurx = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1],1,1,self._num_lower_parts))
         secondLevelCurxCenter = np.zeros((X.shape[0], X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0], X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
 
-        #extractedFeature = np.empty((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
+        extractedFeature = np.empty((X.shape[0],X.shape[1] + self._lowerLayerShape[0] - self._part_shape[0],X.shape[2] + self._lowerLayerShape[1] - self._part_shape[1]))
         totalRange = X.shape[1]
         frame = (self._part_shape[0] - self._lowerLayerShape[0]) / 2
         frame = int(frame)
@@ -54,15 +54,16 @@ class RotExtensionPartsLayer(Layer):
 
         for m in range(X[0].shape[0] + self._lowerLayerShape[0]- self._part_shape[0]):
             for n in range(X[0].shape[1] + self._lowerLayerShape[1] - self._part_shape[1]):
-                codedIndex = np.where(secondLevelCurxCenter[:,m,n]!=-1)
-                notCodedIndex = np.where(secondLevelCurxCenter[:,m,n] == 0)
+                codedIndex = np.where(secondLevelCurxCenter[:,m,n]!=-1)[0]
+                notCodedIndex = np.where(secondLevelCurxCenter[:,m,n] == 0)[0]
+                print(codedIndex.shape)
                 
                 firstLevelPartIndex = secondLevelCurxCenter[codedIndex,m,n]
                 firstLevelPartIndex = np.array(firstLevelPartIndex,dtype = np.int)
                 firstLevelPartIndex = (firstLevelPartIndex - firstLevelPartIndex % self._rotation)//self._rotation
                 theta = self._models[firstLevelPartIndex]
-                XX = secondLevelCurx[codedIndex, m, n][np.newaxis]
-                #print(XX.shape, theta.shape)
+                XX = secondLevelCurx[codedIndex, m, n][:,np.newaxis]
+                print(XX.shape, theta.shape)
                 llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
                 bb = np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0]
                 #print(bb.shape)
