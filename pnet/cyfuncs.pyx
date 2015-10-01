@@ -364,7 +364,53 @@ def code_index_map_with_same_keypoints(np.ndarray[ndim=4,dtype=np.uint8_t] X,
                 
 
     return out_map
+def activation_map_pooling(np.ndarray[ndim=4, dtype=np.float32_t] activation_map, 
+            int num_parts,
+            pooling_shape,
+            strides):
+    offset = subsample_offset_shape((activation_map.shape[1], activation_map.shape[2]), strides)
+    cdef:
+        int sample_size = activation_map.shape[0]
+        int part_index_dim0 = activation_map.shape[1]
+        int part_index_dim1 = activation_map.shape[2]
+        int stride0 = strides[0]
+        int stride1 = strides[1]
+        int pooling0 = pooling_shape[0]
+        int pooling1 = pooling_shape[1]
+        int half_pooling0 = pooling0 // 2
+        int half_pooling1 = pooling1 // 2
+        int offset0 = offset[0]
+        int offset1 = offset[1]
+        
+        int feat_dim0 = part_index_dim0//stride0
+        int feat_dim1 = part_index_dim1//stride1
 
+        np.ndarray[np.float32_t, ndim=4] feature_map = np.zeros((sample_size,
+                                                                 feat_dim0,
+                                                                 feat_dim1,
+                                                                 num_parts),
+                                                                 dtype=np.float32)
+        np.float32_t[:,:,:,:] feature_mv = feature_map
+        np.float32_t[:,:,:,:] activation_mv = activation_map
+
+        int x, y, i, j, n, i0, j0, c
+        float p, currentValue
+    with nogil:
+         for n in range(sample_size): 
+            for i in range(feat_dim0):
+                for j in range(feat_dim1):
+                    x = offset0 + i*stride0 - half_pooling0
+                    y = offset1 + j*stride1 - half_pooling1
+                    for i0 in range(int_max(x, 0), int_min(x + pooling0, part_index_dim0)):
+                        for j0 in range(int_max(y, 0), int_min(y + pooling1, part_index_dim1)):
+                            for c in range(num_parts):
+                                p = activation_mv[n,i0,j0,c]
+                                currentValue = feature_mv[n,i,j,c]
+                                if p >= currentValue:
+                                    feature_mv[n,i,j,c] = p
+
+    return feature_map 
+ 
 def index_map_pooling(np.ndarray[ndim=3,dtype=np.int64_t] part_index_map, 
             int num_parts,
             pooling_shape,

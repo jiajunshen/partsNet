@@ -45,13 +45,15 @@ class PartsLayer(Layer):
                                            n_coded=self._settings.get('n_coded', 1))
 
         #print(feature_map.shape)
+        #print(feature_map.dtype)
+        #print(self._num_parts.dtype)
         return (feature_map, self._num_parts)
     @property
     def trained(self):
         return self._parts is not None 
 
     def train(self, X, Y=None, OriginalX = None):
-        assert Y is None
+        #assert Y is None
         ag.info('Extracting patches')
         patches, patches_original = self._get_patches(X,OriginalX)
         ag.info('Done extracting patches')

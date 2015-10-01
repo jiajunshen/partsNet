@@ -95,11 +95,17 @@ class PermutationGMM(BaseEstimator):
                         cov = self.covars_[p]
                     elif self._covtype == 'full-full':
                         cov = self.covars_[k, p]
-
-                    unorm_log_resp[:, k, p] += multivariate_normal.logpdf(
+                    #print(X.shape, X[:,p0].shape)
+                    #print(self.means_.shape)
+                    #print(p0)
+                    #print(cov.shape)
+                    temp = multivariate_normal.logpdf(
                         X[:, p0],
                         mean=self.means_[k, shift],
                         cov=cov)
+                    #print(temp.shape)
+                    #rint(unorm_log_resp[:, k, p].shape)
+                    unorm_log_resp[:, k, p] += temp
 
         unorm_reshaped = unorm_log_resp.reshape((unorm_log_resp.shape[0], -1))
         logprob = logsumexp(unorm_reshaped, axis=-1)
@@ -268,7 +274,8 @@ class PermutationGMM(BaseEstimator):
                 cv = ag.io.load('/var/tmp/cov.h5')
 
             # Initialize by picking K components at random.
-            if self._covtype == 'diag':
+            #if self._covtype == 'diag':
+            if 1:
                 repr_samples = X[self.random_state.choice(N, K, replace=False)]
                 self.means_ = repr_samples
             elif 0:
@@ -285,8 +292,10 @@ class PermutationGMM(BaseEstimator):
                 self.means_ = clf.means_.reshape((K,) + X.shape[1:])
             else:
                 rs = np.random.RandomState(trial)  # TODO: Insert seed
-                mm = rs.multivariate_normal(np.zeros(F), cv, size=K)
-                self.means_ = mm.reshape((K,) + X.shape[1:])
+                mm = rs.multivariate_normal(np.zeros((F)), cv, size=K)
+                print(mm.shape)
+                print(K, X.shape)
+                self.means_ = mm.reshape((K,) + X.shape[2:])
 
             if self._covtype == 'ones':
                 self.covars_ = np.ones(cv.shape[0])

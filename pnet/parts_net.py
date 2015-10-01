@@ -27,16 +27,18 @@ class PartsNet(Layer):
             if not (not layer.supervised or (layer.supervised and Y is not None)):
                 break
             print(layer)
+            print(layer.trained)
             if not layer.trained:
                 ag.info('Training layer {}...'.format(l))
                 layer.train(curX, Y=Y, OriginalX=X)
                 ag.info('Done.')
-
+            print(layer)
             curX = layer.extract(curX) 
             if isinstance(curX, tuple):
                 sh = curX[0].shape[1:-1] + (curX[1],)
             else:
                 sh = curX.shape[1:]
+            print(sh)
             shapes.append(sh)
 
         self._train_info['shapes'] = shapes

@@ -2,9 +2,12 @@ from __future__ import division, print_function, absolute_import
 from .layer import Layer
 
 from .intensity_threshold_layer import IntensityThresholdLayer
+from .randomPartitionSVMLayer import RandomPartitionSVMLayer
+from .normalizeLayer import NormalizeLayer
 from .edge_layer import EdgeLayer
 from .colorEdge_layer import ColorEdgeLayer
 from .pooling_layer import PoolingLayer
+from .max_pooling_layer import MaxPoolingLayer
 from .parts_layer import PartsLayer
 from .sequentialParts_layer import SequentialPartsLayer
 from .moduloShiftingParts_layer import ModuloShiftingPartsLayer

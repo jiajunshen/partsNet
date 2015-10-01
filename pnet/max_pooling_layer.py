@@ -1,10 +1,12 @@
-from __future__ import division, print_function, absolute_import 
+__author__ = 'jiajunshen'
+
 
 from pnet.layer import Layer
 import numpy as np
+import amitgroup as ag
 
 @Layer.register('pooling-layer')
-class PoolingLayer(Layer):
+class MaxPoolingLayer(Layer):
 
     def __init__(self, shape=(1, 1), strides=(1, 1), settings={}):
         self._shape = shape
@@ -15,19 +17,21 @@ class PoolingLayer(Layer):
     def extract(self, X_F):
         X = X_F[0]
         F = X_F[1]
-
+        X = X.astype(np.float32)
         #if X.ndim == 3:
             #from pnet.cyfuncs import index_map_pooling as poolf
         #else:
         support_mask = self._settings.get('support_mask')
         if support_mask is not None:
-            from pnet.cyfuncs import index_map_pooling_multi_support as poolf
-            feature_map = poolf(X, support_mask.astype(np.uint8), F, self._shape, self._strides) 
+            from pnet.cyfuncs import activation_map_pooling as poolf
+            #feature_map = poolf(X, support_mask.astype(np.uint8), F, self._shape, self._strides)
         else:
-            from pnet.cyfuncs import index_map_pooling_multi as poolf
-            feature_map = poolf(X, F, self._shape, self._strides) 
+            from pnet.cyfuncs import activation_map_pooling as poolf
+            feature_map = poolf(X, F, self._shape, self._strides)
 
         self._extract_info['concentration'] = np.apply_over_axes(np.mean, feature_map, [0, 1, 2])[0,0,0]
+        ag.info("finish pooling")
+        print(feature_map.shape)
         return feature_map
 
     def infoplot(self, vz):

@@ -131,7 +131,7 @@ class OrientedGaussianPartsLayer(Layer):
                               max_samples=np.inf,
                               max_covariance_samples=None,
                               logratio_thresh=-np.inf,
-                              std_thresh=0.2,
+                              std_thresh=0.002,
                               std_thresh_frame=0,
                               covariance_type='tied',
                               min_covariance=1e-3,
@@ -347,7 +347,7 @@ class OrientedGaussianPartsLayer(Layer):
         raw_originals, the_rest = self._get_patches(X)
         self._train_info = {}
         self._train_info['example_patches2'] = raw_originals[:10]
-
+        print(raw_originals.shape)
         # Standardize them
         old_raw_originals = raw_originals.copy()
         if self._settings['standardize']:
@@ -372,6 +372,7 @@ class OrientedGaussianPartsLayer(Layer):
         pp = self.whiten_patches(pp)
         raw_originals = pp.reshape(raw_originals.shape)
 
+        print(raw_originals.shape)
         self.train_from_samples(raw_originals, the_rest)
 
         # TODO
@@ -470,6 +471,7 @@ class OrientedGaussianPartsLayer(Layer):
                             )
 
         Xflat = raw_originals.reshape(raw_originals.shape[:2] + (-1,))
+        print(Xflat.shape)
         mm.fit(Xflat)
 
         comps = mm.predict(Xflat)
@@ -597,8 +599,13 @@ class OrientedGaussianPartsLayer(Layer):
         from skimage import transform
 
         for n, img in enumerate(X):
+            #print(X.shape)
+            #print(img.shape, n)
+
 
             img_padded = ag.util.pad_to_size(img, (new_size[0], new_size[1],) + X.shape[3:])
+            #print(img_padded.shape)
+
             pad = [(new_size[i]-size[i])//2 for i in range(2)]
 
             angles = np.arange(0, 360, 360 / ORI)
@@ -609,7 +616,6 @@ class OrientedGaussianPartsLayer(Layer):
                                  resize=False,
                                  mode='nearest')
                 for angle in angles])
-
             # Add inverted polarity too
             if POL == 2:
                 all_img = np.concatenate([all_img, 1-all_img])
@@ -637,11 +643,11 @@ class OrientedGaussianPartsLayer(Layer):
             avoid_edge = int(1 + np.max(ps)*np.sqrt(2))
 
             # These indices represent the center of patches
+
             range_x = range(pad[0]+avoid_edge, pad[0]+img.shape[0]-avoid_edge)
             range_y = range(pad[1]+avoid_edge, pad[1]+img.shape[1]-avoid_edge)
 
             indices = list(itr.product(range_x, range_y))
-
             rs.shuffle(indices)
             i_iter = itr.cycle(iter(indices))
 
