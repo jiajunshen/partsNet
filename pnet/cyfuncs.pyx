@@ -364,10 +364,28 @@ def code_index_map_with_same_keypoints(np.ndarray[ndim=4,dtype=np.uint8_t] X,
                 
 
     return out_map
+
+def transfer_label(np.ndarray[ndim=1, dtype=np.int64_t] labelMap, np.ndarray[ndim = 2, dtype = np.int64_t] partitionMap, int num_partition, int num_classes):
+    cdef:
+        int sample_size = labelMap.shape[0]
+
+        np.ndarray[ndim=2, dtype=np.int64_t] resultMap = np.zeros((num_partition, sample_size), dtype = np.int64)
+
+        np.int64_t[:,:] result_mv = resultMap
+        np.int64_t[:] label_mv = labelMap
+        np.int64_t[:,:] partition_mv = partitionMap
+    with nogil:
+        for k in range(num_partition):
+            for i in range(sample_size):
+                result_mv[k,i] = partition_mv[k,label_mv[i]]
+
+    return resultMap
+            
 def activation_map_pooling(np.ndarray[ndim=4, dtype=np.float32_t] activation_map, 
             int num_parts,
             pooling_shape,
-            strides):
+            strides,
+            bool relu):
     offset = subsample_offset_shape((activation_map.shape[1], activation_map.shape[2]), strides)
     cdef:
         int sample_size = activation_map.shape[0]
@@ -384,7 +402,7 @@ def activation_map_pooling(np.ndarray[ndim=4, dtype=np.float32_t] activation_map
         
         int feat_dim0 = part_index_dim0//stride0
         int feat_dim1 = part_index_dim1//stride1
-
+        int cRelu = relu
         np.ndarray[np.float32_t, ndim=4] feature_map = np.zeros((sample_size,
                                                                  feat_dim0,
                                                                  feat_dim1,
@@ -399,6 +417,11 @@ def activation_map_pooling(np.ndarray[ndim=4, dtype=np.float32_t] activation_map
          for n in range(sample_size): 
             for i in range(feat_dim0):
                 for j in range(feat_dim1):
+                    for c in range(num_parts):
+                        if(cRelu == 1):
+                            feature_mv[n,i,j,c] = 0
+                        else:
+                            feature_mv[n,i,j,c] = -1000000
                     x = offset0 + i*stride0 - half_pooling0
                     y = offset1 + j*stride1 - half_pooling1
                     for i0 in range(int_max(x, 0), int_min(x + pooling0, part_index_dim0)):

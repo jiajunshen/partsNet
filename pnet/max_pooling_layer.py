@@ -5,7 +5,7 @@ from pnet.layer import Layer
 import numpy as np
 import amitgroup as ag
 
-@Layer.register('pooling-layer')
+@Layer.register('max-pooling-layer')
 class MaxPoolingLayer(Layer):
 
     def __init__(self, shape=(1, 1), strides=(1, 1), settings={}):
@@ -22,16 +22,19 @@ class MaxPoolingLayer(Layer):
             #from pnet.cyfuncs import index_map_pooling as poolf
         #else:
         support_mask = self._settings.get('support_mask')
+        relu = self._settings.get("relu", True)
         if support_mask is not None:
             from pnet.cyfuncs import activation_map_pooling as poolf
             #feature_map = poolf(X, support_mask.astype(np.uint8), F, self._shape, self._strides)
         else:
             from pnet.cyfuncs import activation_map_pooling as poolf
-            feature_map = poolf(X, F, self._shape, self._strides)
+            feature_map = poolf(X, F, self._shape, self._strides, relu)
 
         self._extract_info['concentration'] = np.apply_over_axes(np.mean, feature_map, [0, 1, 2])[0,0,0]
         ag.info("finish pooling")
         print(feature_map.shape)
+        print(np.any(np.isnan(feature_map)))
+        print(np.all(np.isfinite(feature_map)))
         return feature_map
 
     def infoplot(self, vz):

@@ -326,7 +326,7 @@ class OrientedGaussianPartsLayer(Layer):
                 num_features += 1
             return (feature_map, num_features)
         else:
-            return feature_map.reshape(feature_map.shape[:3] + (-1,))
+            return (feature_map.reshape(feature_map.shape[:3] + (-1,)), self.num_parts * C)
 
     @property
     def trained(self):

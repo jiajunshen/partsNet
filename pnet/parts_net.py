@@ -33,7 +33,10 @@ class PartsNet(Layer):
                 layer.train(curX, Y=Y, OriginalX=X)
                 ag.info('Done.')
             print(layer)
-            curX = layer.extract(curX) 
+            if layer.name == 'raondom-partition-svm-layer':
+                curX = layer.extract(curX, Y = Y)
+            else:
+                curX = layer.extract(curX)
             if isinstance(curX, tuple):
                 sh = curX[0].shape[1:-1] + (curX[1],)
             else:
@@ -44,16 +47,18 @@ class PartsNet(Layer):
         self._train_info['shapes'] = shapes
 
     def test(self, X, Y):
-        Yhat = self.extract(X)
+        Yhat = self.extract(X,Y)
         return Yhat == Y
 
-    def classify(self, X):
-        return self.extract(X, classify=True)
+    def classify(self, X, Y = None):
+        return self.extract(X, Y, classify=True)
     
-    def extract(self, X, classify=False):
+    def extract(self, X, Y = None, classify=False):
         curX = X
         for layer in self._layers:
-            if not layer.classifier or classify:
+            if layer.name == 'raondom-partition-svm-layer':
+                curX = layer.extract(curX, Y)
+            elif not layer.classifier or classify:
                 curX = layer.extract(curX)
                 if 0:
                     if isinstance(curX,tuple):

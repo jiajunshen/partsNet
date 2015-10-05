@@ -7,6 +7,11 @@ import pnet
 from multiprocessing import Pool, Value, Array
 
 
+shared_data = None
+def init(_data):
+    global shared_data
+    shared_data = _data
+@Layer.register('raondom-partition-svm-layer')
 class RandomPartitionSVMLayer(Layer):
     def __init__(self, num_parts, part_shape, settings={}):
         # settings: outer_frame, random_seed,samples_per_image,patch_extraction_seed,threshold
@@ -53,7 +58,9 @@ class RandomPartitionSVMLayer(Layer):
 
         print X.shape, feature_map.shape
         p = Pool(4)
-
+        from cyfuncs import transfer_label
+        partitionLabel = transfer_label(np.array(Y).astype(np.int64), np.array(self._partition).astype(np.int64), np.int64(self._num_parts), np.int64(10))
+        predict_mean = np.zeros(self._num_parts)
         for x in range(dim[0]):
             for y in range(dim[1]):
                 Xr = X[:,x:x+self._part_shape[0],y:y+self._part_shape[1],:]
@@ -62,9 +69,14 @@ class RandomPartitionSVMLayer(Layer):
                 scores = p.map(calcScore, args)
                 scores = np.hstack(scores)
                 feature_map[:,x, y,:] = scores.astype(np.float16)
-
+                for i in range(self._num_parts):
+                    predict_mean[i] += np.mean(self._svms[i].predict(Xr_flat) == partitionLabel[i,:])
+        for i in range(self._num_parts):
+            print(predict_mean[i]/(dim[0] * dim[1]))
+        p.close()
         print(feature_map.shape)
-
+        print(np.any(np.isnan(feature_map)))
+        print(np.all(np.isfinite(feature_map)))
         return (feature_map,self._num_parts)
 
 
@@ -130,31 +142,35 @@ class RandomPartitionSVMLayer(Layer):
             newTestLabel
             sampledGroup
         """
-        np.random.seed(self._settings.get('random_seed', 0))
+        #np.random.seed(self._settings.get('random_seed', 0))
         for i in range(self._num_parts):
             sampledGroup = np.zeros(10).astype(np.uint8)
             sampledGroup[np.random.choice(range(10),size = sampleNumber,replace=False)] = 1
-            map = dict(enumerate(sampledGroup))
-            self._partition.append(map)
+            self._partition.append(sampledGroup)
         return
 
     def train_from_samples(self, patches, patches_label, patches_original):
         ag.info("training from samples starts")
         self.random_partition()
         import time
-        p = Pool(4)
-        #patches_list = [patches for i in range(4)]
+        p = Pool(4, initializer=init, initargs=(patches,))
+        patches_label_list = [patches_label for i in range(4)]
 
-        args = ((patches,)+(patches_label,)+(self._partition[i],) for i in range(self._num_parts))
+
+        args = ((patches_label_list[i], self._partition, i, self._num_parts // 4, ) for i in range(4))
         start_time = time.time()
-        svm_objects = p.map(multi_sgd_train, args)
+        svm_objects = p.map(task_spread, args)
+        allObjects = []
+        for objects in svm_objects:
+            allObjects+=objects
+        p.close()
         print("--- %s seconds ---" % (time.time() - start_time))
-        print len(svm_objects)
-        self._svms = svm_objects
+        print len(allObjects)
+        self._svms = allObjects
         self._parts = []
         for i in range(self._num_parts):
-            svm_coef = svm_objects[i].coef_
-            svm_intercept = svm_objects[i].intercept_
+            svm_coef = allObjects[i].coef_
+            svm_intercept = allObjects[i].intercept_
             self._parts.append((svm_coef, svm_intercept))
 
     def save_to_dict(self):
@@ -180,15 +196,14 @@ class RandomPartitionSVMLayer(Layer):
 
 
 
-"""
+
 #To future speed up, we want each processors to take care of svms.
-def task_spread((data, patches_label, partition, i)):
+def task_spread((patches_label, partition, i, round_each_proc)):
     svm_objects = []
-    for j in range(8 * i, 8* (i + 1)):
-        print j
-        svm_objects.append(multi_sgd_train((data, patches_label, partition[j])))
+    for j in range(round_each_proc * i, round_each_proc * (i + 1)):
+        svm_objects.append(multi_sgd_train((shared_data, patches_label, partition[j])))
     return svm_objects
-"""
+
 
 
 def multi_sgd_train((data, patches_label, partition)):
@@ -208,5 +223,6 @@ def calcScore((svm, data)):
     result = np.array(svm.decision_function(data),dtype=np.float16)
     result = result.reshape((result.shape[0], 1))
     return result
+
 
 

@@ -14,12 +14,12 @@ class SVMClassificationLayer(SupervisedLayer):
         self._svm = None
 
     @property
-    def trained(self):
-        return self._svm is not None
+    def classifier(self):
+        return True
 
     @property
-    def classifier(self):
-        return True;
+    def trained(self):
+        return self._svm is not None
 
     def extract(self,X):
         Xflat = X.reshape((X.shape[0], -1))

@@ -7,7 +7,7 @@ class Layer(SaveableRegistry):
     def train(self, X, Y=None, OriginalX=None):
         pass 
 
-    def extract(self, X):
+    def extract(self, X, Y=None):
         raise NotImplemented("Subclass and override to use")
 
     @property
