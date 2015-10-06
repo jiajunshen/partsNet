@@ -11,6 +11,18 @@ shared_data = None
 def init(_data):
     global shared_data
     shared_data = _data
+
+
+shared_X = None
+shared_Y = None
+
+def init_Image(X, Y):
+    global shared_X
+    global shared_Y
+    shared_X = X
+    shared_Y = Y
+
+
 @Layer.register('raondom-partition-svm-layer')
 class RandomPartitionSVMLayer(Layer):
     def __init__(self, num_parts, part_shape, settings={}):
@@ -35,11 +47,15 @@ class RandomPartitionSVMLayer(Layer):
     def train(self, X, Y, OriginalX = None):
         assert Y is not None
         ag.info('Extracting patches')
-        patches, patches_label, patches_original = self._get_color_patches(X,Y,OriginalX)
-        ag.info('Done extracting patches')
-        ag.info('Training patches', patches.shape)
-        ag.info('Training patches labels', patches_label.shape)
-        return self.train_from_samples(patches,patches_label, patches_original)
+        if(self._settings.get("all_locations",True)):
+            patches, patches_label, patches_original = self._get_color_patches(X,Y,OriginalX)
+            ag.info('Done extracting patches')
+            ag.info('Training patches', patches.shape)
+            ag.info('Training patches labels', patches_label.shape)
+            return self.train_from_samples(patches,patches_label, patches_original)
+        else:
+            ag.info('Start multiple svm training: each svm is trained using patches from a specific location and a certain partition')
+            return self.split_train_svms(X,Y)
 
     def extract(self,X, Y = None, test_accuracy = False):
         ag.info("randomPartition SVM start extracting")
@@ -59,8 +75,8 @@ class RandomPartitionSVMLayer(Layer):
         print X.shape, feature_map.shape
         p = Pool(4)
         from cyfuncs import transfer_label
-        partitionLabel = transfer_label(np.array(Y).astype(np.int64), np.array(self._partition).astype(np.int64), np.int64(self._num_parts), np.int64(10))
-        predict_mean = np.zeros(self._num_parts)
+        #partitionLabel = transfer_label(np.array(Y).astype(np.int64), np.array(self._partition).astype(np.int64), np.int64(self._num_parts), np.int64(10))
+        #predict_mean = np.zeros(self._num_parts)
         for x in range(dim[0]):
             for y in range(dim[1]):
                 Xr = X[:,x:x+self._part_shape[0],y:y+self._part_shape[1],:]
@@ -69,10 +85,10 @@ class RandomPartitionSVMLayer(Layer):
                 scores = p.map(calcScore, args)
                 scores = np.hstack(scores)
                 feature_map[:,x, y,:] = scores.astype(np.float16)
-                for i in range(self._num_parts):
-                    predict_mean[i] += np.mean(self._svms[i].predict(Xr_flat) == partitionLabel[i,:])
-        for i in range(self._num_parts):
-            print(predict_mean[i]/(dim[0] * dim[1]))
+                #for i in range(self._num_parts):
+                    #predict_mean[i] += np.mean(self._svms[i].predict(Xr_flat) == partitionLabel[i,:])
+        #for i in range(self._num_parts):
+        #    print(predict_mean[i]/(dim[0] * dim[1]))
         p.close()
         print(feature_map.shape)
         print(np.any(np.isnan(feature_map)))
@@ -130,6 +146,11 @@ class RandomPartitionSVMLayer(Layer):
                     if tries == N-1:
                         ag.info('WARNING: {} tries'.format(N))
 
+
+
+
+
+
         return np.asarray(patches),np.asarray(patches_label).astype(np.uint8),np.asarray(patches_original)
     def random_partition(self, sampleNumber = 5):
         """
@@ -172,6 +193,41 @@ class RandomPartitionSVMLayer(Layer):
             svm_coef = allObjects[i].coef_
             svm_intercept = allObjects[i].intercept_
             self._parts.append((svm_coef, svm_intercept))
+
+    def split_train_svms(self, X, Y):
+        ag.info("Split training SVMs")
+        import time,random
+        p = Pool(4, initializer=init_Image, initargs=(X,Y,))
+        class1, class2 = split_1vs2(10)
+        combined = zip(class1,class2)
+        rs = np.random.RandomState(0)
+        rs.shuffle(combined)
+        combined = combined[:self._num_parts]
+        class1[:],class2[:] = zip(*combined)
+        print(len(class1), len(class2))
+        round_each_proc = self._num_parts//4
+        args = [(i, round_each_proc, self._part_shape, (3,3), class1[round_each_proc * i: round_each_proc * (i + 1)],
+                 class2[round_each_proc * i: round_each_proc * (i + 1)]) for i in range(4)]
+        start_time = time.time()
+        svm_objects = p.map(task_spread_svms, args)
+        #init_Image(X,Y)
+        #svm_objects = task_spread_svms(args[0])
+        allObjects = []
+        for objects in svm_objects:
+            allObjects+=objects
+        p.close()
+        print("--- %s seconds ---" % (time.time() - start_time))
+        print len(allObjects)
+        self._svms = allObjects
+        self._parts = []
+        for i in range(self._num_parts):
+            svm_coef = allObjects[i].coef_
+            svm_intercept = allObjects[i].intercept_
+            self._parts.append((svm_coef, svm_intercept))
+
+
+
+
 
     def save_to_dict(self):
         d = {}
@@ -223,6 +279,99 @@ def calcScore((svm, data)):
     result = np.array(svm.decision_function(data),dtype=np.float16)
     result = result.reshape((result.shape[0], 1))
     return result
+
+def task_spread_svms((i, round_each_proc, part_shape, sample_shape, class1, class2)):
+    svm_objects = []
+    for j in range(round_each_proc * i, round_each_proc * (i + 1)):
+        #everytime we pick only one location,
+        print i
+        patches, patches_label = get_color_patches_location(shared_X, shared_Y, class1[j - i * round_each_proc], class2[j - i * round_each_proc],
+                                                            locations_per_try=1, part_shape=part_shape,
+                                                            sample_shape=sample_shape,fr = 1, randomseed=j,
+                                                            threshold=0, max_samples=300000)
+        #combined = zip(patches,patches_label)
+        #import random
+        #random.shuffle(combined)
+        #patches[:], patches_label[:] = zip(*combined)
+
+        from sklearn import linear_model
+        import sklearn
+        #from sklearn.svm import LinearSVC
+        from sklearn import svm
+        #print("max values .....")
+        #print(np.max(patches))
+        #print("means.....")
+        #print(np.mean(patches, axis = 0))
+        clf = linear_model.SGDClassifier(loss = "hinge",penalty = 'l2', n_iter=200, shuffle=True,verbose = False,
+                                         learning_rate = "constant", eta0 = 0.01, random_state = 0)
+        #clf = LinearSVC(C=1.0)
+        #X_scaled = sklearn.preprocessing.scale(patches)
+        clf.fit(patches, patches_label)
+        print(np.mean(clf.predict(patches) == patches_label))
+        svm_objects.append(clf)
+    return svm_objects
+
+def split_1vs2(n):
+    import itertools
+    class1 = []
+    class2 = []
+    for i in range(n):
+        restSet = [j for j in range(n) if j!=i]
+        subset = list(itertools.combinations(restSet, 2))
+        class2+=subset
+        class1+=([i] for j in range(len(subset)))
+    return class1, class2
+
+
+
+
+
+def get_color_patches_location(X, Y, class1, class2, locations_per_try, part_shape, sample_shape, fr, randomseed, threshold, max_samples):
+    assert X.ndim == 4
+    channel = X.shape[-1]
+    patches = []
+    patches_label = []
+    rs = np.random.RandomState(randomseed)
+
+    #th = self._settings['threshold']
+    th = threshold
+    w, h = [X.shape[1 + j]-part_shape[j] - sample_shape[j] +2 for j in range(2)]
+    indices = list(itr.product(range(w-1), range(h-1)))
+    rs.shuffle(indices)
+    i_iter = itr.cycle(iter(indices))
+    for trie in range(locations_per_try):
+        x, y = next(i_iter)
+        print(x,y)
+        for i in range(X.shape[0]):
+            Xi = X[i]
+            # How many patches could we extract?
+            if(Y[i] not in class1 and Y[i] not in class2):
+                continue
+            for x_i in range(sample_shape[0]):
+                for y_i in range(sample_shape[1]):
+                    selection = [slice(x + x_i, x + x_i + part_shape[0]), slice(y + y_i, y+ y_i + part_shape[1])]
+                    patch = Xi[selection]
+                    #edgepatch_nospread = edges_nospread[selection]
+                    if fr == 0:
+                        tot = patch.sum()
+                    else:
+                        tot = abs(patch[fr:-fr,fr:-fr]).sum()
+
+                    if th <= tot * channel:
+                        patches.append(patch)
+                        if(Y[i] in class1):
+                            patches_label.append(-1)
+                        else:
+                            patches_label.append(1)
+                        if len(patches) >= max_samples:
+                            patches = np.asarray(patches)
+                            patches = patches.reshape((patches.shape[0], -1))
+                            return np.asarray(patches),np.asarray(patches_label).astype(np.uint8)
+
+    ag.info('ENDING: {} patches'.format(len(patches)))
+    patches = np.asarray(patches)
+    patches = patches.reshape((patches.shape[0], -1))
+    return np.asarray(patches),np.asarray(patches_label).astype(np.uint8)
 
 
 
