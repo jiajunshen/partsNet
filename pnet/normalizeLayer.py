@@ -19,7 +19,8 @@ class NormalizeLayer(Layer):
         self._mean = np.mean(X, axis = 0)
 
     def extract(self, X):
-        return (X - self._mean).astype(np.float16)
+        #return (X - self._mean).astype(np.float32)
+        return (X).astype(np.float32)
 
     def save_to_dict(self):
         d = {}

@@ -47,7 +47,8 @@ class SVMClassificationLayer(SupervisedLayer):
             clf = LinearSVC(C=self._penalty, random_state=self._settings.get('seed', 0))
             clf.fit(Xflat, Y)
 
-        self._svm = clf 
+        self._svm = clf
+        print(np.mean(clf.predict(Xflat) == Y))
 
     def save_to_dict(self):
         d = {}
