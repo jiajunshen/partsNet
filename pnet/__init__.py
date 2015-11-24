@@ -8,6 +8,7 @@ from .edge_layer import EdgeLayer
 from .colorEdge_layer import ColorEdgeLayer
 from .pooling_layer import PoolingLayer
 from .max_pooling_layer import MaxPoolingLayer
+from .sgd_svm_classification_layer import SGDSVMClassificationLayer
 from .parts_layer import PartsLayer
 from .sequentialParts_layer import SequentialPartsLayer
 from .moduloShiftingParts_layer import ModuloShiftingPartsLayer
@@ -25,6 +26,7 @@ from .extensionPooling_layer import ExtensionPoolingLayer
 from .logisticRegression import LogisticRegression
 from .rotatable_extensionParts_layer import RotExtensionPartsLayer
 from .rotation_mixture_classification_layer import RotationMixtureClassificationLayer
+from .randomPartitionLogisticTheano import multiLogisticRegression
 
 from .rbm import RBM
 from . import plot

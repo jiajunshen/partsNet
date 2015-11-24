@@ -3,6 +3,7 @@ import numpy as np
 import itertools as itr
 import amitgroup as ag
 from pnet.layer import Layer
+from randomPartitionLogisticTheano import multiLogisticRegression
 import pnet
 from multiprocessing import Pool, Value, Array
 
@@ -56,6 +57,8 @@ class RandomPartitionSVMLayer(Layer):
             ag.info('Training patches', patches.shape)
             ag.info('Training patches labels', patches_label.shape)
             return self.train_from_samples(patches,patches_label, patches_original)
+        elif self._settings.get("use_theano", False):
+            return self.theano_train_logistic(X, Y)
         else:
             ag.info('Start multiple svm training: each svm is trained using patches from a specific location and a certain partition')
             return self.split_train_svms(X,Y)
@@ -112,7 +115,7 @@ class RandomPartitionSVMLayer(Layer):
         #print(feature_map.shape)
         #print(np.any(np.isnan(feature_map)))
         #print(np.all(np.isfinite(feature_map)))
-        print(self._svms[0].decision_function(X[0,0:3,0:3,:].reshape(1,-1)))
+        #print(self._svms[0].decision_function(X[0,0:3,0:3,:].reshape(1,-1)))
         print(feature_map[0,0,0,0])
         return (feature_map,self._num_parts)
 
@@ -257,8 +260,13 @@ class RandomPartitionSVMLayer(Layer):
         self._coef = []
         self._intercept = []
         for i in range(self._num_parts):
-            svm_coef = allObjects[i].coef_
-            svm_intercept = allObjects[i].intercept_
+            if 1:
+                print(i, self._num_parts)
+                svm_coef = allObjects[i].coef_
+                svm_intercept = allObjects[i].intercept_
+            else:
+                svm_coef = allObjects[i]["coef_"]
+                svm_intercept = allObjects[i]["intercept_"]
             allParam = np.zeros(svm_coef.shape[1] + 1)
             allParam[:svm_coef.shape[1]] = svm_coef[0,:]
             allParam[-1] = svm_intercept
@@ -275,6 +283,60 @@ class RandomPartitionSVMLayer(Layer):
         print(np.mean(self._coef))
         print(np.max(self._intercept))
         print(np.mean(self._intercept))
+
+
+    def theano_train_logistic(self, X, Y):
+        ag.info("Using theano to train splitting SVM/Logistics")
+        import time, random
+        class1, class2 = split_1vs2(10)
+        combined = zip(class1, class2)
+        rs = np.random.RandomState(self._settings.get('random_seeds', 0))
+
+        #sample_per_model = 360 * 30 * 27 / (self._part_shape[0] * self._part_shape[1] * X.shape[3])
+        print(X.shape)
+        time1 = time.time()
+
+        batch_size = np.sqrt(10 ** 9 / self._num_parts / 4 / 9 / 0.3 / self._part_shape[0] / self._part_shape[1] / X.shape[3]) * 3
+        sample_per_model = int(9 * batch_size * 0.3 * 0.7 // 100) * 100
+
+        num_batch = max(int(np.floor(X.shape[0] / batch_size)), 1)
+        print(sample_per_model, "sample_per_model")
+        print(batch_size, "batch_size")
+        print(num_batch, "num_batch")
+        clf = multiLogisticRegression(n_feature = self._part_shape[0] * self._part_shape[1] * X.shape[3], n_model = self._num_parts, sample_per_model=sample_per_model, trainingSteps = 1000)
+
+
+        for i in range(num_batch):
+            print(i, num_batch)
+            allPatches = ()
+            allPatches_label = ()
+
+            for j in range(self._num_parts):
+                patches, patches_label = get_color_patches_location(X[i * batch_size: min((i + 1) * batch_size, X.shape[0])], Y[i * batch_size : (i + 1) * batch_size], class1[j], class2[j],
+                                                            locations_per_try=1, part_shape=self._part_shape,
+                                                            sample_shape=(3, 3),fr = 1, randomseed=j + self._settings.get('random_seeds', 0),
+                                                            threshold=0, max_samples=1000000)
+                #print(patches.shape[0])
+                print(patches.shape[0], sample_per_model)
+                assert patches.shape[0] >= sample_per_model
+                patches = patches[:sample_per_model].reshape((1,) + patches[:sample_per_model].shape)
+                patches_label = patches_label[:sample_per_model].reshape((1,) + patches_label[:sample_per_model].shape)
+                allPatches += ((patches,))
+                allPatches_label += ((patches_label,))
+            allPatches = np.vstack(allPatches)
+            allPatches_label = np.vstack(allPatches_label)
+            print(allPatches.shape)
+            #print(allPatches_label.shape)
+            clf.train(input_data=allPatches, input_label=allPatches_label)
+        self._coef = clf.W
+        self._intercept = clf.bias
+        time2 = time.time()
+        print 'theano_train function took %0.3f ms' % ((time2-time1)*1000.0)
+        print(np.max(self._coef))
+        print(np.mean(self._coef))
+        print(np.max(self._intercept))
+        print(np.mean(self._intercept))
+
 
 
 
@@ -380,16 +442,64 @@ def task_spread_svms((i, round_each_proc, part_shape, sample_shape, class1, clas
         #print(np.max(patches))
         #print("means.....")
         #print(np.mean(patches, axis = 0))
-        clf = linear_model.SGDClassifier(alpha=0.001, loss = "log",penalty = 'l2', n_iter=20, shuffle=True,verbose = False,
-                                         learning_rate = "optimal", eta0 = 0.0, epsilon=0.1, random_state = None, warm_start=False,
-                                         power_t=0.5, l1_ratio=1.0, fit_intercept=True)
         #clf = LinearSVC(C=1.0)
         #X_scaled = sklearn.preprocessing.scale(patches)
 
-        clf.fit(patches, patches_label)
-        print(np.mean(clf.predict(patches) == patches_label))
-        svm_objects.append(clf)
+        if 1:
+            clf = linear_model.SGDClassifier(alpha=0.001, loss = "log",penalty = 'l2', n_iter=20, shuffle=True,verbose = False,
+                                             learning_rate = "optimal", eta0 = 0.0, epsilon=0.1, random_state = None, warm_start=False,
+                                             power_t=0.5, l1_ratio=1.0, fit_intercept=True)
+            clf.fit(patches, patches_label)
+            print(np.mean(clf.predict(patches) == patches_label))
+            svm_objects.append(clf)
+        else:
+            clf = logitRegression(patches, patches_label, j + currentSeeds)
+            svm_objects.append(clf)
     return svm_objects
+
+
+def logitRegression(patches, patches_label, random_seed):
+    import numpy
+    import numpy as np
+    import theano
+    import theano.tensor as T
+    numpy.random.seed(random_seed)
+    rng = numpy.random
+
+    N = patches.shape[0]
+    feats = patches.shape[1]
+    D = (patches.astype(theano.config.floatX), patches_label.astype(theano.config.floatX))
+    training_steps = 10000
+
+    # Declare Theano symbolic variables
+    x = T.matrix("x")
+    y = T.vector("y")
+    w = theano.shared(rng.randn(feats).astype(theano.config.floatX), name="w")
+    b = theano.shared(numpy.asarray(0., dtype=theano.config.floatX), name="b")
+    x.tag.test_value = D[0]
+    y.tag.test_value = D[1]
+
+    # Construct Theano expression graph
+    p_1 = 1 / (1 + T.exp(-T.dot(x, w)-b)) # Probability of having a one
+    prediction = p_1 > 0.5 # The prediction that is done: 0 or 1
+    xent = -y*T.log(p_1) - (1-y)*T.log(1-p_1) # Cross-entropy
+    cost = xent.mean() + 0.01*(w**2).sum() # The cost to optimize
+    gw,gb = T.grad(cost, [w,b])
+
+    # Compile expressions to functions
+    train = theano.function(
+                inputs=[x,y],
+                outputs=[prediction, xent],
+                updates=[(w, w-0.01*gw), (b, b-0.01*gb)],
+                name = "train")
+    predict = theano.function(inputs=[x], outputs=prediction,
+                name = "predict")
+    for i in range(training_steps):
+        pred, err = train(D[0], D[1])
+    print(np.mean(predict(patches) == patches_label))
+    return {"coef_":w.get_value().reshape((1,-1)), "intercept_":b.get_value()}
+
+
 
 def split_1vs2(n):
     import itertools
@@ -457,6 +567,4 @@ def get_color_patches_location(X, Y, class1, class2, locations_per_try, part_sha
     patches = np.asarray(patches)
     patches = patches.reshape((patches.shape[0], -1))
     return np.asarray(patches),np.asarray(patches_label).astype(np.uint8)
-
-
 

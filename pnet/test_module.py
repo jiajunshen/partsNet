@@ -35,4 +35,12 @@ strides = (2,2)
 result_cython = poolf(X, F, shape, strides, False)
 diffArray = result_cython - python_poolf(X, F, shape, strides, False)
 diffArray = diffArray.reshape(diffArray.shape[0], -1)
-print(np.mean(diffArray, axis = 0))
+print(np.mean(np.mean(diffArray, axis = 0), axis = 0))
+
+
+
+X = np.random.rand(10000,20,20,100).astype(np.float32)
+result_cython = poolf(X, F, shape, strides, True)
+diffArray = result_cython - python_poolf(X, F, shape, strides, True)
+diffArray = diffArray.reshape(diffArray.shape[0], -1)
+print(np.mean(np.mean(diffArray, axis = 0), axis = 0))
