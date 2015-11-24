@@ -24,7 +24,7 @@ from sklearn.svm import LinearSVC
 
 #net_pretrain = pnet.PartsNet.load("./test_360_scaled.npy")
 
-
+print("before train")
 layers = [
     pnet.NormalizeLayer(),
     #pnet.IntensityThresholdLayer(),
@@ -46,6 +46,7 @@ layers = [
                                                                                 max_samples=500000,
                                                                                 patch_extraction_seed = 17389,
                                                                                 all_locations = False,
+                                                                                use_theano = True,
                                                                                 random_seeds = 17389
     )),
     #pnet.EdgeLayer(k=5, radius=1, spread='orthogonal', minimum_contrast=0.05),
@@ -63,6 +64,7 @@ layers = [
                                                                                 max_samples=100000,
                                                                                 patch_extraction_seed = 37813,
                                                                                 all_locations = False,
+                                                                                use_theano = True,
                                                                                 random_seeds = 37813
     )),
     pnet.MaxPoolingLayer(shape=(2,2), strides=(2, 2)),
@@ -92,7 +94,7 @@ digits = range(10)
 ims,label = ag.io.load_cifar10('training', selection=slice(5000))
 
 #print(net.sizes(X[[0]]))
-
+print("start train")
 net.train(ims,label)
 
 """
