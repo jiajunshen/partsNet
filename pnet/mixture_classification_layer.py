@@ -22,7 +22,7 @@ class MixtureClassificationLayer(SupervisedLayer):
         return True
 
     def check_correctness (self, X_all):
-        for i in range(11):
+        for i in range(len(self._modelinstance)):
             theta = self._models[i]
             Yhat = np.zeros(X_all.shape[0])
             Yhat_score = np.zeros(X_all.shape[0])
@@ -32,9 +32,21 @@ class MixtureClassificationLayer(SupervisedLayer):
             llh = np.sum(XX * np.log(theta) + (1 - XX) * np.log(1 - theta), axis = (-3, -2, -1)) + np.log(self._modelinstance[i].weights_)
             lpr = logsumexp(llh, axis = 0)
             print(np.sum(lpr))
-            print(self._modelinstance[i].score(X.reshape(1, 512)))
+            print(self._modelinstance[i].score(X.reshape(1, -1)))
         
-
+    def score(self, X_all):
+        scoreList = []
+        for i in range(len(self._modelinstance)):
+            Yhat = np.zeros(X_all.shape[0])
+            blockSize = 50
+            for j in range(0, X_all.shape[0], blockSize):
+                blockend = min(X_all.shape[0], i + blockSize)
+                X = X_all[j:blockend]
+                Yhat[j:blockend] = self._modelinstance[i].score(X.reshape(blockend - j, -1))
+            scoreList.append(Yhat)
+        scoreList = np.vstack(scoreList)
+        return scoreList
+            
     def extract(self, X_all):
         #print "mixture classification extract started"
         theta = self._models[np.newaxis]
