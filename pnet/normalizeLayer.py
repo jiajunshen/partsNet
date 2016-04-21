@@ -20,6 +20,8 @@ class NormalizeLayer(Layer):
 
     def extract(self, X):
         #return (X - self._mean).astype(np.float32)
+        print("max value .....")
+        print(np.max(X))
         return (X).astype(np.float32)
 
     def save_to_dict(self):

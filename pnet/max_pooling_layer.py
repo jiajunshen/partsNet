@@ -24,6 +24,7 @@ class MaxPoolingLayer(Layer):
         #print(np.any(np.isnan(X)))
         #print(np.all(np.isfinite(X)))
         print ("inside extrating")
+        print(X.shape)
         print(X.dtype)
         support_mask = self._settings.get('support_mask')
         relu = self._settings.get("relu", True)

@@ -27,7 +27,7 @@ def init_Image(X, Y):
 
 @Layer.register('raondom-partition-svm-layer')
 class RandomPartitionSVMLayer(Layer):
-    def __init__(self, num_parts, part_shape, settings={}):
+    def __init__(self, num_parts, part_shape, prune = None, settings={}):
         # settings: outer_frame, random_seed,samples_per_image,patch_extraction_seed,threshold
         #, outer_frame=1, threshold=1):
         self._num_parts = num_parts
@@ -37,6 +37,7 @@ class RandomPartitionSVMLayer(Layer):
         self._settings = settings
         self._train_info = {}
         self._partition = []
+        self._prune = prune
         self._parts = None
         self._svms = None
 
@@ -67,7 +68,11 @@ class RandomPartitionSVMLayer(Layer):
         ag.info("randomPartition SVM start extracting")
         outer_frame = self._settings.get('outer_frame', 0)
         dim = (X.shape[1],X.shape[2])
+        print ("X.shape")
+        print X.shape
+        print outer_frame
         if  outer_frame != 0:
+            print("==============")
             XX = np.zeros((X.shape[0], X.shape[1] + 2 * outer_frame, X.shape[2] + 2 * outer_frame, X.shape[3]), dtype=np.float16)
             XX[:, outer_frame:X.shape[1] + outer_frame, outer_frame:X.shape[2] + outer_frame,:] = X
             X = XX
@@ -83,11 +88,13 @@ class RandomPartitionSVMLayer(Layer):
         #partitionLabel = transfer_label(np.array(Y).astype(np.int64), np.array(self._partition).astype(np.int64), np.int64(self._num_parts), np.int64(10))
         #predict_mean = np.zeros(self._num_parts)
         X_num = X.shape[0]
+        print X.shape
         import itertools
         argList = list(itertools.product(range(dim[0]),range(dim[1])))
-        for i in range(int(np.ceil(len(argList)/8.0))):
+        for i in range(int(np.ceil(len(argList)/4.0))):
             p = Pool(4)
-            currentList = argList[i * 8 : min((i + 1) * 8, len(argList))]
+            #print i
+            currentList = argList[i * 4 : min((i + 1) * 4, len(argList))]
             #print(currentList)
             args = ((x, y, self._coef,self._intercept,
                      X[:,x:x+self._part_shape[0],
@@ -117,6 +124,7 @@ class RandomPartitionSVMLayer(Layer):
         #print(np.all(np.isfinite(feature_map)))
         #print(self._svms[0].decision_function(X[0,0:3,0:3,:].reshape(1,-1)))
         print(feature_map[0,0,0,0])
+        print(feature_map.shape)
         return (feature_map,self._num_parts)
 
 
@@ -259,24 +267,47 @@ class RandomPartitionSVMLayer(Layer):
         self._parts = []
         self._coef = []
         self._intercept = []
-        for i in range(self._num_parts):
-            if 1:
-                print(i, self._num_parts)
+        if self._prune == None:
+            for i in range(self._num_parts):
+                if 1:
+                    print(i, self._num_parts)
+                    svm_coef = allObjects[i].coef_
+                    svm_intercept = allObjects[i].intercept_
+                else:
+                    svm_coef = allObjects[i]["coef_"]
+                    svm_intercept = allObjects[i]["intercept_"]
+                allParam = np.zeros(svm_coef.shape[1] + 1)
+                allParam[:svm_coef.shape[1]] = svm_coef[0,:]
+                allParam[-1] = svm_intercept
+                std = np.std(allParam) * 20
+                #std = 1
+                print(np.std(allParam/std),np.max(allParam/std))
+                self._parts.append((svm_coef/std, svm_intercept/std))
+                self._coef.append(svm_coef/std)
+                self._intercept.append(svm_intercept/std)
+        else:
+            partList = []
+            coefList = []
+            interceptList = []
+            coefLengthList = []
+            for i in range(self._num_parts):
                 svm_coef = allObjects[i].coef_
                 svm_intercept = allObjects[i].intercept_
-            else:
-                svm_coef = allObjects[i]["coef_"]
-                svm_intercept = allObjects[i]["intercept_"]
-            allParam = np.zeros(svm_coef.shape[1] + 1)
-            allParam[:svm_coef.shape[1]] = svm_coef[0,:]
-            allParam[-1] = svm_intercept
-            std = np.std(allParam) * 20
-            #std = 1
-            print(np.std(allParam/std),np.max(allParam/std))
-            self._parts.append((svm_coef/std, svm_intercept/std))
-            self._coef.append(svm_coef/std)
-            self._intercept.append(svm_intercept/std)
-
+                allParam = np.zeros(svm_coef.shape[1] + 1)
+                allParam[:svm_coef.shape[1]] = svm_coef[0,:]
+                allParam[-1] = svm_intercept
+                std = np.std(allParam) * 20
+                partList.append((svm_coef/std, svm_intercept/std))
+                coefList.append(svm_coef/std)
+                interceptList.append(svm_intercept/std)
+                coefLengthList.append(np.sum(abs(svm_coef/std)))
+            coefLengthList = np.array(coefLengthList)
+            coefMaxOrder = np.argsort(coefLengthList)[::-1]
+            for i in range(self._prune):
+                self._parts.append(partList[coefMaxOrder[i]])
+                self._coef.append(coefList[coefMaxOrder[i]])
+                self._intercept.append(interceptList[coefMaxOrder[i]])
+            self._num_parts = self._prune
         self._coef = np.vstack(self._coef)
         self._intercept = np.vstack(self._intercept)
         print(np.max(self._coef))
@@ -353,11 +384,12 @@ class RandomPartitionSVMLayer(Layer):
         d['svms'] = self._svms
         d['coef'] = self._coef
         d['intercept'] = self._intercept
+        d['prune'] = self._prune
         return d
 
     @classmethod
     def load_from_dict(cls, d):
-        obj = cls(d['num_parts'],d['part_shape'],d['settings'])
+        obj = cls(d['num_parts'],d['part_shape'],d['prune'], d['settings'])
         obj._train_info = d['training_info']
         obj._partition = d['partition']
         obj._parts = d['parts']

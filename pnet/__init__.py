@@ -27,7 +27,10 @@ from .logisticRegression import LogisticRegression
 from .rotatable_extensionParts_layer import RotExtensionPartsLayer
 from .rotation_mixture_classification_layer import RotationMixtureClassificationLayer
 from .randomPartitionLogisticTheano import multiLogisticRegression
-
+from .pca_layer import PCALayer
+from .quadrantPartitionSVMLayer import QuadrantPartitionSVMLayer
+from .combineQuardPool import CombineQuadrantPartitionSVMLayer
+from .intermediateSupervisionLayer import IntermediateSupervisionLayer
 from .rbm import RBM
 from . import plot
 

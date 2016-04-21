@@ -31,6 +31,7 @@ class MixtureClassificationLayer(SupervisedLayer):
                 X = X_all[i:blockend]
                 XX =  X[:,np.newaxis,np.newaxis]
                 llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
+                print(llh.shape)
                 Yhat[i:blockend] = np.argmax(np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0].max(-1), axis=1)
         #print "mixture classification extract finished"
         #print(Yhat.shape)

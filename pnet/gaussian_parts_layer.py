@@ -55,7 +55,7 @@ class GaussianPartsLayer(Layer):
         return self._clf is not None 
 
     def train(self, X, Y=None,OriginalX=None):
-        assert Y is None
+        #assert Y is None
         ag.info('Extracting patches')
         patches = self._get_patches(X)
         ag.info('Done extracting patches')
@@ -107,7 +107,7 @@ class GaussianPartsLayer(Layer):
         # Reject some parts
 
     def _get_patches(self, X):
-        assert X.ndim == 3
+        #assert X.ndim == 3
 
         samples_per_image = self._settings.get('samples_per_image', 20) 
         patches = []
@@ -134,7 +134,7 @@ class GaussianPartsLayer(Layer):
 
                     patch = Xi[selection]
 
-                    if patch.std() > 0.2: 
+                    if patch.sum() > self._settings.get('threshold', 5):
                         patches.append(patch)
                         if len(patches) >= self._settings.get('max_samples', np.inf):
                             return np.asarray(patches)
@@ -146,7 +146,7 @@ class GaussianPartsLayer(Layer):
                         ag.info('cons', consecutive_failures)
                         consecutive_failures += 1
 
-                    if consecutive_failures >= 10:
+                    if consecutive_failures >= 200:
                         # Just give up.
                         raise ValueError("FATAL ERROR: Threshold is probably too high.")
 
