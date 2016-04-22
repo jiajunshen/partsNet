@@ -40,7 +40,7 @@ class MixtureClassificationLayer(SupervisedLayer):
             Yhat = np.zeros(X_all.shape[0])
             blockSize = 50
             for j in range(0, X_all.shape[0], blockSize):
-                blockend = min(X_all.shape[0], i + blockSize)
+                blockend = min(X_all.shape[0], j + blockSize)
                 X = X_all[j:blockend]
                 Yhat[j:blockend] = self._modelinstance[i].score(X.reshape(blockend - j, -1))
             scoreList.append(Yhat)
