@@ -7,12 +7,14 @@ from sklearn.utils.extmath import logsumexp
 
 @Layer.register('mixture-classification-layer')
 class MixtureClassificationLayer(SupervisedLayer):
-    def __init__(self, n_components=1, min_prob=0.0001, block_size=0, settings={}):
+    def __init__(self, n_components=1, min_prob=0.0001, block_size=0, mixture_type = "bernoulli", settings={}):
         self._n_components = n_components
         self._min_prob = min_prob
         self._models = None
         self._block_size = block_size
+        self._mixture_type = mixture_type
         self._modelinstance = None
+        self._settings = settings
     @property
     def trained(self):
         return self._models is not None
@@ -37,6 +39,7 @@ class MixtureClassificationLayer(SupervisedLayer):
     def score(self, X_all):
         scoreList = []
         for i in range(len(self._modelinstance)):
+            print ("model", i)
             Yhat = np.zeros(X_all.shape[0])
             blockSize = 50
             for j in range(0, X_all.shape[0], blockSize):
@@ -45,23 +48,28 @@ class MixtureClassificationLayer(SupervisedLayer):
                 Yhat[j:blockend] = self._modelinstance[i].score(X.reshape(blockend - j, -1))
             scoreList.append(Yhat)
         scoreList = np.vstack(scoreList)
+        scoreList = np.swapaxes(scoreList, 0, 1)
         return scoreList
             
     def extract(self, X_all):
         #print "mixture classification extract started"
-        theta = self._models[np.newaxis]
-        Yhat = np.zeros(X_all.shape[0])
-        if 1:
-            #use blocksize 10
-            blockSize = 50
-            for i in range(0,X_all.shape[0],blockSize):
-                blockend = min(X_all.shape[0],i + blockSize) 
-                X = X_all[i:blockend]
-                XX =  X[:,np.newaxis,np.newaxis]
-                llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
-                Yhat[i:blockend] = np.argmax(np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0].max(-1), axis=1)
-        #print "mixture classification extract finished"
-        #print(Yhat.shape)
+        if self._mixture_type == "bernoullimm":
+            theta = self._models[np.newaxis]
+            Yhat = np.zeros(X_all.shape[0])
+            if 1:
+                #use blocksize 10
+                blockSize = 50
+                for i in range(0,X_all.shape[0],blockSize):
+                    blockend = min(X_all.shape[0],i + blockSize) 
+                    X = X_all[i:blockend]
+                    XX =  X[:,np.newaxis,np.newaxis]
+                    llh = XX * np.log(theta) + (1 - XX) * np.log(1 - theta)
+                    Yhat[i:blockend] = np.argmax(np.apply_over_axes(np.sum, llh, [-3, -2, -1])[...,0,0,0].max(-1), axis=1)
+            #print "mixture classification extract finished"
+            #print(Yhat.shape)
+        else:
+            llh = self.score(X_all)
+            Yhat = np.argmax(llh, axis = 1) 
         return Yhat 
     
     def train(self, X, Y, OriginalX = None):
@@ -75,11 +83,15 @@ class MixtureClassificationLayer(SupervisedLayer):
             #print(X.shape)
             #print(Y.shape)
             Xk = Xk.reshape((Xk.shape[0], -1))
-            mm = BernoulliMM(n_components=self._n_components, n_iter=10, n_init=1, random_state=0, min_prob=self._min_prob,blocksize = self._block_size)
+            if self._mixture_type == "bernoullimm":
+                mm = BernoulliMM(n_components=self._n_components, n_iter=10, n_init=1, random_state=0, min_prob=self._min_prob,blocksize = self._block_size)
+            # else will assume it as gaussian mixture model
+            else:
+                from sklearn.mixture import GMM
+                mm = GMM(n_components = self._n_components, n_iter = 20, n_init = 1, random_state=0, covariance_type = self._settings.get('covariance_type', 'diag'),)
             mm.fit(Xk)
             mm_models.append(mm.means_.reshape((self._n_components,)+X.shape[1:]))
             self._modelinstance.append(mm)
-
         self._models = np.asarray(mm_models)
         #print "mixtureclassification-layer training finished"
     
