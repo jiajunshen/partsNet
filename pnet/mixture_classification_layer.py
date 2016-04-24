@@ -39,7 +39,6 @@ class MixtureClassificationLayer(SupervisedLayer):
     def score(self, X_all):
         scoreList = []
         for i in range(len(self._modelinstance)):
-            print ("model", i)
             Yhat = np.zeros(X_all.shape[0])
             blockSize = 50
             for j in range(0, X_all.shape[0], blockSize):
