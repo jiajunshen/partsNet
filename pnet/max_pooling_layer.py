@@ -65,7 +65,7 @@ class MaxPoolingLayer(Layer):
             plt.savefig(vz.generate_filename(ext='svg'))
 
             #vz.log('concentration', self._extract_info['concentration'])
-            vz.log('mean concentration: {:.1f}%'.format(100*self._extract_info['concentration'].mean()))
+            vz.log('mean concentration: {:.1%}'.format(self._extract_info['concentration'].mean()))
 
 
     def save_to_dict(self):
