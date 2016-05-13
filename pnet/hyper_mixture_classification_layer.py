@@ -4,6 +4,22 @@ import numpy as np
 import amitgroup as ag
 from pnet.bernoullimm import BernoulliMM
 from sklearn.utils.extmath import logsumexp
+from multiprocessing import Pool
+from multiprocessing import Process, Pipe
+from itertools import izip
+
+def spawn(f):
+    def fun(pipe,x):
+        pipe.send(f(x))
+        pipe.close()
+    return fun
+
+def parmap(f,X):
+    pipe=[Pipe() for x in X]
+    proc=[Process(target=spawn(f),args=(c,x)) for x,(p,c) in izip(X,pipe)]
+    [p.start() for p in proc]
+    [p.join() for p in proc]
+    return [p.recv() for (p,c) in pipe]
 
 @Layer.register('hyper-mixture-classification-layer')
 class HyperMixtureClassificationLayer(SupervisedLayer):
@@ -50,6 +66,7 @@ class HyperMixtureClassificationLayer(SupervisedLayer):
         mm_models = []
         self._modelinstance = []
         for k in range(K):
+            print("training for class", k)
             Xk = X[Y == k]
             #import pdb ; pdb.set_trace()
             #print(Xk.shape)
@@ -60,12 +77,18 @@ class HyperMixtureClassificationLayer(SupervisedLayer):
             from sklearn.mixture import GMM
             hyper_mm_means = []
             hyper_mm_models = []
-            for hyper_component in range(Xk.shape[1]):
+	    def eachProcessor(hyper_component):
                 mm = GMM(n_components = self._n_components, n_iter = 20, n_init = 1, random_state=0, covariance_type = self._settings.get('covariance_type', 'diag'))
                 mm.fit(Xk[:,hyper_component])
                 hyper_mm_means.append(mm.means_.reshape((self._n_components,)+X.shape[2:]))
                 hyper_mm_models.append(mm)
-            
+		return mm.means_.reshape((self._n_components,)+X.shape[2:]), mm
+		
+	    result = parmap(eachProcessor, list(np.arange(Xk.shape[1])))
+            for m in range(Xk.shape[1]):
+		hyper_mm_means.append[result[m][0]]
+		hyper_mm_models.append[result[m][1]]
+
             mm_models.append(np.vstack(hyper_mm_means))
             self._modelinstance.append(hyper_mm_models)
         self._models = np.asarray(mm_models)
